@@ -1,0 +1,17 @@
+{
+  "name": "nuuke-crm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nuuke Mission Control — client and delivery CRM for an app development studio",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "db:setup": "npm --prefix server run db:setup",
+    "db:seed": "npm --prefix server run db:seed",
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
