@@ -44,8 +44,10 @@ const json = (status: number, data: unknown) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
 function adminClient(): SupabaseClient {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const clean = (v?: string) => v?.trim().replace(/^['"]+|['"]+$/g, '').trim() || undefined;
+  const url = clean(process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL)
+    ?.replace(/\/+$/, '').replace(/\/(rest|auth)\/v1$/i, '').replace(/\/+$/, '');
+  const key = clean(process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!url || !key) {
     throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY must be set in the Netlify environment');
   }

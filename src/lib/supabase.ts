@@ -1,8 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined;
+/** Forgiving about how the values were pasted into Netlify: stray spaces, quotes, or the
+ *  "/rest/v1/" ending that the Supabase Data API page shows next to the URL. */
+const clean = (v: unknown) => (typeof v === 'string' ? v.trim().replace(/^['"]+|['"]+$/g, '').trim() : '') || undefined;
+export const projectUrl = (v: unknown) => clean(v)?.replace(/\/+$/, '').replace(/\/(rest|auth)\/v1$/i, '').replace(/\/+$/, '');
+
+const url = projectUrl(import.meta.env.VITE_SUPABASE_URL);
+const key = clean(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 /** False until the Netlify (or local) environment has the Supabase URL and key. */
 export const supabaseConfigured = Boolean(url && key);

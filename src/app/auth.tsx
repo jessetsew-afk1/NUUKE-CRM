@@ -21,6 +21,17 @@ interface AuthValue {
 
 const Ctx = createContext<AuthValue | null>(null);
 
+/** Turns Supabase's sign-in errors into something a person can act on — and only blames
+ *  the password when the password really is the problem. */
+function signInMessage(raw: string) {
+  if (/invalid login credentials/i.test(raw)) return 'That email and password do not match';
+  if (/email not confirmed/i.test(raw)) return 'This email has not been confirmed yet — ask your admin to confirm it in Supabase';
+  if (/banned/i.test(raw)) return 'This login has been switched off — talk to your admin';
+  if (/api key|apikey|secret/i.test(raw)) return `The app's Supabase key is not right (${raw}). Check VITE_SUPABASE_PUBLISHABLE_KEY in Netlify, then redeploy.`;
+  if (/invalid path|not found|failed to fetch|network/i.test(raw)) return `The app cannot reach Supabase (${raw}). Check VITE_SUPABASE_URL in Netlify — it should look like https://xxxx.supabase.co — then redeploy.`;
+  return raw;
+}
+
 export function useAuth() {
   const v = useContext(Ctx);
   if (!v) throw new Error('useAuth outside AuthProvider');
@@ -67,9 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) {
-      throw new Error(/invalid/i.test(error.message) ? 'That email and password do not match' : /banned/i.test(error.message) ? 'This login has been switched off — talk to your admin' : error.message);
-    }
+    if (error) throw new Error(signInMessage(error.message));
     void rpc('record_login', { p_kind: 'login', p_user_agent: navigator.userAgent }).catch(() => {});
     // Signing in starts the shift clock for anyone whose attendance is tracked.
     const { data: emp } = await supabase.from('employment').select('tracks_attendance').eq('profile_id', data.user.id).maybeSingle();
