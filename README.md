@@ -37,7 +37,7 @@ everyone, an admin control room, and a little agent for every person who signs i
 - **Overview:** who's online, on break, late or missing; today's floor numbers; alerts; top closers; lead health; payroll estimate.
 - **Leads & import:** upload the Google Sheet as CSV or Excel.
   - Columns are matched automatically and dates are read correctly.
-  - Duplicate numbers are skipped.
+  - Every row is kept, repeats included; only blank rows (no name, phone or email) are dropped. Skipping numbers already in NUUKE is an optional tick box.
   - Leads can go to one rep, be split evenly, or follow the sheet's *Assigned to* column.
   - 10,000 rows take about 2 seconds.
   - Then filter, bulk-assign, recycle or delete.
