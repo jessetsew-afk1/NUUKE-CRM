@@ -1139,7 +1139,7 @@ export type Database = {
         Returns: Json
       }
       import_leads: {
-        Args: { p_import_id: number; p_rows: Json }
+        Args: { p_import_id: number; p_rows: Json; p_skip_duplicates?: boolean }
         Returns: Json
       }
       is_admin: {
