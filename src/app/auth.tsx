@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc, supabase } from '@/lib/supabase';
@@ -14,7 +14,8 @@ interface AuthValue {
   isStaff: boolean;
   tracksAttendance: boolean;
   refresh: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
+  /** `beforeEnter` runs after the password is accepted and before the app replaces the sign-in page. */
+  signIn: (email: string, password: string, opts?: { beforeEnter?: () => Promise<void> }) => Promise<void>;
   signOut: () => Promise<void>;
   patchProfile: (p: Partial<Profile>) => void;
 }
@@ -44,6 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [employment, setEmployment] = useState<Employment | null>(null);
   const [loading, setLoading] = useState(true);
+  // While signIn() is running it loads the profile itself, so the auth listener stays out of the way.
+  const signingIn = useRef(false);
 
   const load = useCallback(async (s: Session | null) => {
     setSession(s);
@@ -71,20 +74,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (first && event === 'INITIAL_SESSION') { first = false; return; }
       if (event === 'TOKEN_REFRESHED') { setSession(s); return; }
+      if (event === 'SIGNED_IN' && signingIn.current) return;
       void load(s);
     });
     return () => sub.subscription.unsubscribe();
   }, [load]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) throw new Error(signInMessage(error.message));
-    void rpc('record_login', { p_kind: 'login', p_user_agent: navigator.userAgent }).catch(() => {});
-    // Signing in starts the shift clock for anyone whose attendance is tracked.
-    const { data: emp } = await supabase.from('employment').select('tracks_attendance').eq('profile_id', data.user.id).maybeSingle();
-    if (emp?.tracks_attendance) await rpc('clock_in').catch(() => {});
-    await load(data.session);
-    await qc.invalidateQueries();
+  const signIn = useCallback(async (email: string, password: string, opts?: { beforeEnter?: () => Promise<void> }) => {
+    signingIn.current = true;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) throw new Error(signInMessage(error.message));
+      void rpc('record_login', { p_kind: 'login', p_user_agent: navigator.userAgent }).catch(() => {});
+      // Signing in starts the shift clock for anyone whose attendance is tracked.
+      const { data: emp } = await supabase.from('employment').select('tracks_attendance').eq('profile_id', data.user.id).maybeSingle();
+      const clocking = emp?.tracks_attendance ? rpc('clock_in').catch(() => {}) : Promise.resolve();
+      await Promise.all([clocking, opts?.beforeEnter?.() ?? Promise.resolve()]);
+      await load(data.session);
+      await qc.invalidateQueries();
+    } finally {
+      signingIn.current = false;
+    }
   }, [load, qc]);
 
   const signOut = useCallback(async () => {
