@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
+import { seedProjects } from './seed-projects.mjs';
 
 // ---------------------------------------------------------------------------- env
 for (const file of ['.env.local', '.env']) {
@@ -229,7 +230,7 @@ async function wipe() {
   await sql.query(`truncate public.lead_attempts, public.meetings, public.deals, public.leads, public.lead_imports,
                             public.notifications, public.audit_log, public.login_events, public.attendance_alerts,
                             public.attendance_breaks, public.attendance_sessions, public.attendance_days,
-                            public.payroll_releases, public.holidays, public.agent_unlocks
+                            public.payroll_releases, public.holidays, public.agent_unlocks, public.projects
                    restart identity cascade`);
 }
 
@@ -552,8 +553,12 @@ async function main() {
     note('admin', 'attendance.auto_signout', 'Hamza Qureshi did not sign out', 'They were signed out automatically an hour after the reminder.', '/admin/attendance', 'danger', 2900),
   ]);
 
+  // Projects, the production workspace and the client portal.
+  const clients = await seedProjects({ db, sql, ids, today, password: PASSWORD });
+
   console.log('\nSign in with (password: ' + PASSWORD + '):');
   for (const p of PEOPLE) console.log(`  ${p.role.padEnd(10)} ${p.email.padEnd(22)} ${p.full_name}`);
+  for (const c of clients) console.log(`  ${'client'.padEnd(10)} ${c.email.padEnd(22)} ${c.full_name} (${c.title})`);
 }
 
 main()

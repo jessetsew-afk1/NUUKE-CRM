@@ -14,6 +14,21 @@ export type Notification = T['notifications']['Row'];
 export type AuditEntry = T['audit_log']['Row'];
 export type LeadImport = T['lead_imports']['Row'];
 export type Holiday = T['holidays']['Row'];
+export type Project = T['projects']['Row'];
+export type ProjectMember = T['project_members']['Row'];
+export type Sprint = T['sprints']['Row'];
+export type Task = T['tasks']['Row'];
+export type TaskComment = T['task_comments']['Row'];
+export type ProjectFile = T['project_files']['Row'];
+export type FileComment = T['file_comments']['Row'];
+export type ContentPost = T['content_posts']['Row'];
+export type ProjectEvent = T['project_events']['Row'];
+export type ProjectMessage = T['project_messages']['Row'];
+export type ProjectActivity = T['project_activity']['Row'];
+
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done';
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type ReviewStatus = 'none' | 'pending' | 'approved' | 'changes_requested';
 
 export type DealStage = 'prospect' | 'meeting' | 'proposal' | 'negotiation' | 'won' | 'lost';
 

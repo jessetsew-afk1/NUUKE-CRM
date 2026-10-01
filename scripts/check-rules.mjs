@@ -146,6 +146,86 @@ const faisal = await as('faisal@nuuke.test');
   ok(!e6, 'Agent unlocks evaluate', JSON.stringify(unlocks));
 }
 
+
+// ---- projects: who sees what
+{
+  const umar = await as('umar@nuuke.test');
+  const sarah = await as('sarah@halcyon.test');
+  const leo = await as('leo@brightbrew.test');
+  const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+  const names = async (u) => (await u.c.from('projects').select('name').order('name')).data.map((p) => p.name);
+
+  const f = await names(faisal);
+  ok(f.length === 2 && f.every((n) => n.startsWith('Halcyon')), 'Production sees only the projects they are on', f.join(', '));
+  ok((await names(umar)).length === 3, 'Another teammate sees their own three projects');
+  const sp = await names(sarah);
+  ok(sp.length === 2, 'A client sees only their projects (and can switch between them)', sp.join(', '));
+  ok((await names(leo)).join() === 'BrightBrew Launch Campaign', "Another client sees only theirs");
+  ok((await names(zoya)).length === 0, 'Sales sees no projects');
+  ok((await names(admin)).length === 4, 'The admin sees every project');
+
+  const { data: app } = await service.from('projects').select('id').eq('name', 'Halcyon Patient App').single();
+  const { data: brew } = await service.from('projects').select('id').eq('name', 'BrightBrew Launch Campaign').single();
+  const { count: hiddenAll } = await service.from('tasks').select('*', { count: 'exact', head: true }).eq('project_id', app.id).eq('client_visible', false);
+  const { data: sTasks } = await sarah.c.from('tasks').select('client_visible').eq('project_id', app.id);
+  ok(hiddenAll > 0 && sTasks.length > 0 && sTasks.every((t) => t.client_visible), 'A client never sees internal tasks', `${sTasks.length} visible, ${hiddenAll} hidden`);
+  const { data: sFiles } = await sarah.c.from('project_files').select('title, client_visible').eq('project_id', app.id);
+  ok(sFiles.every((x) => x.client_visible) && !sFiles.some((x) => /internal/i.test(x.title)), 'A client never sees internal files');
+  const { data: leoSees } = await leo.c.from('project_files').select('id').eq('project_id', app.id);
+  const { data: leoMsgs } = await leo.c.from('project_messages').select('id').eq('project_id', app.id);
+  ok(leoSees.length === 0 && leoMsgs.length === 0, "A client cannot see another client's files or messages");
+  const { data: leoPeople } = await leo.c.from('profiles').select('email');
+  const emails = leoPeople.map((p) => p.email);
+  ok(emails.includes('umar@nuuke.test') && !emails.includes('faisal@nuuke.test') && !emails.includes('zoya@nuuke.test'),
+    'A client sees their own team, not the rest of the company', emails.join(', '));
+  const { data: emp } = await leo.c.from('employment').select('profile_id');
+  ok(emp.length === 0, "A client cannot see anyone's salary");
+
+  // writes
+  const { data: oneTask } = await sarah.c.from('tasks').select('id, title').eq('project_id', app.id).limit(1).single();
+  const { data: upd } = await sarah.c.from('tasks').update({ title: 'hacked' }).eq('id', oneTask.id).select();
+  ok(!upd?.length, 'A client cannot edit tasks');
+  const { error: ins } = await sarah.c.from('tasks').insert({ project_id: app.id, title: 'Sneaky' });
+  ok(!!ins, 'A client cannot add tasks to the board');
+  const { error: selfAdd } = await faisal.c.from('project_members').insert({ project_id: brew.id, profile_id: faisal.id });
+  ok(!!selfAdd, 'Production cannot add themselves to a project');
+  const { error: toClient } = await faisal.c.from('tasks').insert({ project_id: app.id, title: 'For the client', assignee_id: sarah.id });
+  ok(!!toClient, 'Tasks can only go to people on the team', toClient?.message);
+  const { error: notMine } = await faisal.c.from('tasks').insert({ project_id: brew.id, title: 'Wrong project' });
+  ok(!!notMine, "Production cannot add tasks to a project they're not on");
+
+  // the review
+  const { data: pending } = await service.from('project_files').select('id, title').eq('project_id', app.id).eq('review_status', 'pending').order('id').limit(1).single();
+  const { error: fakeApprove } = await faisal.c.rpc('review_file', { p_file: pending.id, p_decision: 'approved' });
+  ok(!!fakeApprove, 'The team cannot approve on the client\'s behalf', fakeApprove?.message);
+  const { error: directApprove } = await faisal.c.from('project_files').update({ review_status: 'approved' }).eq('id', pending.id);
+  ok(!!directApprove, '…not even by editing the file directly', directApprove?.message);
+  const { error: noNote } = await sarah.c.rpc('review_file', { p_file: pending.id, p_decision: 'changes_requested' });
+  ok(!!noNote, 'Asking for changes needs a note', noNote?.message);
+  const { data: reviewed, error: rev } = await sarah.c.rpc('review_file', { p_file: pending.id, p_decision: 'approved', p_note: 'Ship it' });
+  ok(!rev && reviewed.review_status === 'approved', 'The client approves a deliverable', rev?.message ?? pending.title);
+  const { data: told } = await service.from('notifications').select('user_id, kind').eq('kind', 'review_done').eq('user_id', faisal.id).gte('created_at', new Date(Date.now() - 60_000).toISOString());
+  ok(told.length > 0, 'The team is told the moment the client decides');
+  await service.from('project_files').update({ review_status: 'pending' }).eq('id', pending.id);
+
+  // files in storage
+  const { data: img } = await service.from('project_files').select('storage_path').eq('project_id', app.id).not('storage_path', 'is', null).eq('client_visible', true).limit(1).single();
+  const { error: own } = await sarah.c.storage.from('project-files').createSignedUrl(img.storage_path, 60);
+  ok(!own, 'A client can open files shared with them', own?.message);
+  const { error: other } = await leo.c.storage.from('project-files').createSignedUrl(img.storage_path, 60);
+  ok(!!other, "A client cannot open another client's files", other?.message);
+  const { error: up } = await leo.c.storage.from('project-files').upload(`${app.id}/sneaky.txt`, new Blob(['x']), { contentType: 'text/plain' });
+  ok(!!up, "Nobody can upload into a project they're not on");
+
+  // messages
+  const { error: msgErr } = await leo.c.from('project_messages').insert({ project_id: brew.id, body: 'Rule check — please ignore', author_id: leo.id });
+  const { data: ping } = await service.from('notifications').select('user_id').eq('kind', 'client_message').gte('created_at', new Date(Date.now() - 60_000).toISOString());
+  const pinged = new Set(ping.map((n) => n.user_id));
+  ok(!msgErr && pinged.has(umar.id) && pinged.has(admin.id) && !pinged.has(faisal.id), 'A client message alerts that team and the admins only');
+  await service.from('project_messages').delete().eq('body', 'Rule check — please ignore');
+  await service.from('notifications').delete().eq('kind', 'client_message').gte('created_at', new Date(Date.now() - 60_000).toISOString());
+}
+
 // ---- clean up the clock-in so the demo starts fresh
 await zoya.c.rpc('clock_out');
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');

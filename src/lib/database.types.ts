@@ -321,6 +321,73 @@ export type Database = {
           },
         ]
       }
+      content_posts: {
+        Row: {
+          caption: string | null
+          client_visible: boolean
+          created_at: string
+          file_id: number | null
+          id: number
+          owner_id: string | null
+          platform: string
+          project_id: number
+          scheduled_at: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          caption?: string | null
+          client_visible?: boolean
+          created_at?: string
+          file_id?: number | null
+          id?: never
+          owner_id?: string | null
+          platform?: string
+          project_id: number
+          scheduled_at?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          caption?: string | null
+          client_visible?: boolean
+          created_at?: string
+          file_id?: number | null
+          id?: never
+          owner_id?: string | null
+          platform?: string
+          project_id?: number
+          scheduled_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_posts_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_posts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_posts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deals: {
         Row: {
           amount_usd: number
@@ -450,6 +517,64 @@ export type Database = {
             foreignKeyName: "employment_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      file_comments: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          file_id: number
+          id: number
+          pin_x: number | null
+          pin_y: number | null
+          resolved_at: string | null
+          resolved_by: string | null
+        }
+        Insert: {
+          author_id?: string
+          body: string
+          created_at?: string
+          file_id: number
+          id?: never
+          pin_x?: number | null
+          pin_y?: number | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          file_id?: number
+          id?: never
+          pin_x?: number | null
+          pin_y?: number | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "file_comments_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "file_comments_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -950,6 +1075,369 @@ export type Database = {
         }
         Relationships: []
       }
+      project_activity: {
+        Row: {
+          actor_id: string | null
+          client_visible: boolean
+          created_at: string
+          id: number
+          kind: string
+          link: string | null
+          project_id: number
+          summary: string
+        }
+        Insert: {
+          actor_id?: string | null
+          client_visible?: boolean
+          created_at?: string
+          id?: never
+          kind: string
+          link?: string | null
+          project_id: number
+          summary: string
+        }
+        Update: {
+          actor_id?: string | null
+          client_visible?: boolean
+          created_at?: string
+          id?: never
+          kind?: string
+          link?: string | null
+          project_id?: number
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_activity_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_activity_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_events: {
+        Row: {
+          client_visible: boolean
+          created_at: string
+          created_by: string | null
+          ends_at: string | null
+          id: number
+          kind: string
+          location: string | null
+          notes: string | null
+          project_id: number
+          starts_at: string
+          title: string
+        }
+        Insert: {
+          client_visible?: boolean
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          id?: never
+          kind?: string
+          location?: string | null
+          notes?: string | null
+          project_id: number
+          starts_at: string
+          title: string
+        }
+        Update: {
+          client_visible?: boolean
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          id?: never
+          kind?: string
+          location?: string | null
+          notes?: string | null
+          project_id?: number
+          starts_at?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_files: {
+        Row: {
+          client_visible: boolean
+          created_at: string
+          description: string | null
+          external_url: string | null
+          from_client: boolean
+          group_id: number | null
+          id: number
+          kind: string
+          mime_type: string | null
+          project_id: number
+          review_note: string | null
+          review_reminded_at: string | null
+          review_requested_at: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          size_bytes: number | null
+          storage_path: string | null
+          title: string
+          uploaded_by: string | null
+          version: number
+        }
+        Insert: {
+          client_visible?: boolean
+          created_at?: string
+          description?: string | null
+          external_url?: string | null
+          from_client?: boolean
+          group_id?: number | null
+          id?: never
+          kind?: string
+          mime_type?: string | null
+          project_id: number
+          review_note?: string | null
+          review_reminded_at?: string | null
+          review_requested_at?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          size_bytes?: number | null
+          storage_path?: string | null
+          title: string
+          uploaded_by?: string | null
+          version?: number
+        }
+        Update: {
+          client_visible?: boolean
+          created_at?: string
+          description?: string | null
+          external_url?: string | null
+          from_client?: boolean
+          group_id?: number | null
+          id?: never
+          kind?: string
+          mime_type?: string | null
+          project_id?: number
+          review_note?: string | null
+          review_reminded_at?: string | null
+          review_requested_at?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          size_bytes?: number | null
+          storage_path?: string | null
+          title?: string
+          uploaded_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_files_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_files_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_members: {
+        Row: {
+          added_at: string
+          is_lead: boolean
+          profile_id: string
+          project_id: number
+        }
+        Insert: {
+          added_at?: string
+          is_lead?: boolean
+          profile_id: string
+          project_id: number
+        }
+        Update: {
+          added_at?: string
+          is_lead?: boolean
+          profile_id?: string
+          project_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_messages: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: number
+          project_id: number
+        }
+        Insert: {
+          author_id?: string
+          body: string
+          created_at?: string
+          id?: never
+          project_id: number
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: never
+          project_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_messages_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_reads: {
+        Row: {
+          messages_seen_at: string
+          profile_id: string
+          project_id: number
+        }
+        Insert: {
+          messages_seen_at?: string
+          profile_id?: string
+          project_id: number
+        }
+        Update: {
+          messages_seen_at?: string
+          profile_id?: string
+          project_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_reads_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_reads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          archived_at: string | null
+          client_name: string | null
+          color: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_on: string | null
+          id: number
+          name: string
+          service: string | null
+          starts_on: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          client_name?: string | null
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_on?: string | null
+          id?: never
+          name: string
+          service?: string | null
+          starts_on?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          client_name?: string | null
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_on?: string | null
+          id?: never
+          name?: string
+          service?: string | null
+          starts_on?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           absent_alert_minutes: number
@@ -1025,11 +1513,187 @@ export type Database = {
         }
         Relationships: []
       }
+      sprints: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          ends_on: string
+          goal: string | null
+          id: number
+          name: string
+          project_id: number
+          starts_on: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          ends_on: string
+          goal?: string | null
+          id?: never
+          name: string
+          project_id: number
+          starts_on: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          ends_on?: string
+          goal?: string | null
+          id?: never
+          name?: string
+          project_id?: number
+          starts_on?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sprints_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_comments: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: number
+          task_id: number
+        }
+        Insert: {
+          author_id?: string
+          body: string
+          created_at?: string
+          id?: never
+          task_id: number
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: never
+          task_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          assignee_id: string | null
+          client_visible: boolean
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_on: string | null
+          id: number
+          labels: string[]
+          position: number
+          priority: string
+          project_id: number
+          reminded_on: string | null
+          sprint_id: number | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          client_visible?: boolean
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_on?: string | null
+          id?: never
+          labels?: string[]
+          position?: number
+          priority?: string
+          project_id: number
+          reminded_on?: string | null
+          sprint_id?: number | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          client_visible?: boolean
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_on?: string | null
+          id?: never
+          labels?: string[]
+          position?: number
+          priority?: string
+          project_id?: number
+          reminded_on?: string | null
+          sprint_id?: number | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      actor_name: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       admin_lead_facets: {
         Args: Record<PropertyKey, never>
         Returns: Json
@@ -1098,6 +1762,18 @@ export type Database = {
         Args: { p_email: string; p_full_name: string }
         Returns: string
       }
+      can_read_project_object: {
+        Args: { p_name: string }
+        Returns: boolean
+      }
+      can_see_project: {
+        Args: { p_project: number }
+        Returns: boolean
+      }
+      can_work_project: {
+        Args: { p_project: number }
+        Returns: boolean
+      }
       check_agent_unlocks: {
         Args: Record<PropertyKey, never>
         Returns: string[]
@@ -1113,6 +1789,10 @@ export type Database = {
       clock_out: {
         Args: { p_reason?: string }
         Returns: Json
+      }
+      complete_sprint: {
+        Args: { p_move_to?: number; p_sprint: number }
+        Returns: number
       }
       day_break_seconds: {
         Args: { p_day_id: number }
@@ -1146,6 +1826,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      is_project_client: {
+        Args: { p_project: number }
+        Returns: boolean
+      }
       is_staff: {
         Args: Record<PropertyKey, never>
         Returns: boolean
@@ -1175,8 +1859,22 @@ export type Database = {
         }
         Returns: Json
       }
+      log_project: {
+        Args: {
+          p_client_visible?: boolean
+          p_kind: string
+          p_link?: string
+          p_project: number
+          p_summary: string
+        }
+        Returns: undefined
+      }
       mark_notifications_read: {
         Args: { p_ids?: number[] }
+        Returns: undefined
+      }
+      mark_project_read: {
+        Args: { p_project: number }
         Returns: undefined
       }
       my_attendance: {
@@ -1257,6 +1955,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      notify_project: {
+        Args: {
+          p_body?: string
+          p_data?: Json
+          p_kind: string
+          p_link?: string
+          p_project: number
+          p_title: string
+          p_tone?: string
+          p_who: string
+        }
+        Returns: undefined
+      }
       payroll_compute: {
         Args: { p_period_start?: string; p_profile: string }
         Returns: Json
@@ -1272,6 +1983,26 @@ export type Database = {
       payroll_period_start: {
         Args: { p_date: string }
         Returns: string
+      }
+      project_access: {
+        Args: { p_project: number }
+        Returns: string
+      }
+      project_name: {
+        Args: { p_project: number }
+        Returns: string
+      }
+      project_sweep: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      project_unread: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          last_at: string
+          project_id: number
+          unread: number
+        }[]
       }
       queue_summary: {
         Args: {
@@ -1297,6 +2028,32 @@ export type Database = {
       resolve_work_date: {
         Args: { p_at: string; p_profile: string }
         Returns: string
+      }
+      review_file: {
+        Args: { p_decision: string; p_file: number; p_note?: string }
+        Returns: {
+          client_visible: boolean
+          created_at: string
+          description: string | null
+          external_url: string | null
+          from_client: boolean
+          group_id: number | null
+          id: number
+          kind: string
+          mime_type: string | null
+          project_id: number
+          review_note: string | null
+          review_reminded_at: string | null
+          review_requested_at: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          size_bytes: number | null
+          storage_path: string | null
+          title: string
+          uploaded_by: string | null
+          version: number
+        }
       }
       run_sweeps: {
         Args: Record<PropertyKey, never>
@@ -1352,6 +2109,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      shares_project_with: {
+        Args: { p_profile: string }
+        Returns: boolean
+      }
       shift_start_at: {
         Args: { p_date: string; p_profile: string }
         Returns: string
@@ -1362,6 +2123,24 @@ export type Database = {
       }
       start_lead_import: {
         Args: { p_file_name: string; p_total: number }
+        Returns: number
+      }
+      start_sprint: {
+        Args: { p_sprint: number }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          ends_on: string
+          goal: string | null
+          id: number
+          name: string
+          project_id: number
+          starts_on: string
+          status: string
+        }
+      }
+      storage_project: {
+        Args: { p_name: string }
         Returns: number
       }
       update_lead_contact: {
