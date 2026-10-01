@@ -12,8 +12,28 @@ const key = clean(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? import.meta.e
 /** False until the Netlify (or local) environment has the Supabase URL and key. */
 export const supabaseConfigured = Boolean(url && key);
 
+/**
+ * A request that hangs (the laptop slept, the Wi-Fi dropped) gives up after 30 seconds
+ * with an error the app can show, instead of leaving a button spinning forever.
+ * File uploads and downloads get as long as they need.
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+const fetchWithTimeout: typeof fetch = (input, init) => {
+  const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  if (href.includes('/storage/v1/') || typeof AbortSignal.timeout !== 'function') return fetch(input, init);
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const signal = init?.signal
+    ? (typeof AbortSignal.any === 'function' ? AbortSignal.any([init.signal, timeout]) : init.signal)
+    : timeout;
+  return fetch(input, { ...init, signal }).catch((err: unknown) => {
+    if ((err as Error)?.name === 'TimeoutError') throw new Error('NUUKE could not reach the server — check your internet and try again.');
+    throw err;
+  });
+};
+
 export const supabase = createClient<Database>(url ?? 'http://localhost:54321', key ?? 'not-configured', {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: 'nuuke-auth' },
+  global: { fetch: fetchWithTimeout },
 });
 
 type Fn = Database['public']['Functions'];
