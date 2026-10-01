@@ -27,7 +27,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.6",
-    "read-excel-file": "^9.3.10"
+    "read-excel-file": "^9.3.10",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@netlify/functions": "^6.0.1",
@@ -37,6 +38,7 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.1",
     "pg": "^8.23.1",
     "tailwindcss": "^4.3.3",
