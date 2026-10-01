@@ -104,7 +104,7 @@ to start. Free projects pause after a week with no visits, so move to Pro ($25/m
 2. **Database → Extensions:** turn on **pg_cron** (it runs the attendance and meeting jobs every five minutes).
 3. Load the database. Either:
    - with the CLI: `supabase link --project-ref <your-ref>` then `supabase db push`, **or**
-   - in **SQL Editor**, run each file in `supabase/migrations/` in name order.
+   - in **SQL Editor → New query**, paste all of `supabase/setup-all.sql` (every migration in one file) and press **Run**.
 4. **Authentication → Sign In / Providers → Email:** turn **off** "Allow new users to sign up".
    Only the admin creates logins. You can also turn off "Confirm email".
 5. **Authentication → URL Configuration:** set **Site URL** to your Netlify address.
