@@ -1,16 +1,21 @@
 import type { ReactNode } from 'react';
 import {
-  BarChart3, CalendarDays, ClipboardList, FileSpreadsheet, Gauge, Headphones, History, Kanban, LayoutDashboard,
-  Settings, Shirt, Trophy, Users, Wallet, Clock, Inbox, Sparkles,
+  BarChart3, CalendarDays, ClipboardList, Columns3, Eye, FileSpreadsheet, FolderKanban, Gauge, Headphones, History, Kanban,
+  LayoutDashboard, ListTodo, Megaphone, MessagesSquare, Rocket, Settings, Shirt, Trophy, Users, Wallet, Clock, Inbox, Sparkles,
 } from 'lucide-react';
 import type { Role } from '@/lib/types';
 
-export interface NavItem { to: string; label: string; icon: ReactNode; end?: boolean; mobile?: boolean; short?: string }
+export interface NavItem {
+  to: string; label: string; icon: ReactNode; end?: boolean; mobile?: boolean; short?: string;
+  /** A count on the item; `urgent` makes it the pulsing red dot. */
+  badge?: number; urgent?: boolean;
+}
+export interface NavContext { projectId?: number | null; reviews?: number; unread?: number }
 export interface NavGroup { label: string; items: NavItem[] }
 
 const i = (C: typeof Gauge) => <C className="size-[18px]" strokeWidth={2.1} />;
 
-export function navFor(role: Role): NavGroup[] {
+export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
   const me: NavGroup = {
     label: 'You',
     items: [
@@ -42,7 +47,8 @@ export function navFor(role: Role): NavGroup[] {
           items: [
             { to: '/admin', label: 'Overview', icon: i(LayoutDashboard), end: true, mobile: true },
             { to: '/admin/sales', label: 'Sales floor', short: 'Sales', icon: i(Gauge), mobile: true },
-            { to: '/admin/leads', label: 'Leads & import', short: 'Leads', icon: i(FileSpreadsheet), mobile: true },
+            { to: '/projects', label: 'Projects', icon: i(FolderKanban), mobile: true, badge: ctx.unread },
+            { to: '/admin/leads', label: 'Leads & import', short: 'Leads', icon: i(FileSpreadsheet) },
             { to: '/leaderboard', label: 'Leaderboard', icon: i(Trophy) },
           ],
         },
@@ -60,10 +66,35 @@ export function navFor(role: Role): NavGroup[] {
       ];
     case 'production':
       return [
-        { label: 'Production', items: [{ to: '/work', label: 'My workspace', short: 'Work', icon: i(Sparkles), mobile: true }] },
+        {
+          label: 'Production',
+          items: [
+            { to: '/work', label: 'My workspace', short: 'Home', icon: i(Sparkles), end: true, mobile: true },
+            { to: '/projects', label: 'Projects', icon: i(FolderKanban), mobile: true, badge: ctx.unread },
+            { to: '/work/tasks', label: 'My tasks', short: 'Tasks', icon: i(ListTodo), mobile: true },
+            { to: '/work/calendar', label: 'Calendar', icon: i(CalendarDays), mobile: true },
+          ],
+        },
         me,
       ];
-    default:
-      return [{ label: 'Your project', items: [{ to: '/portal', label: 'Project', icon: i(Sparkles), mobile: true }] }, me];
+    default: {
+      const base = ctx.projectId ? `/projects/${ctx.projectId}` : '/portal';
+      return [
+        {
+          label: 'Your project',
+          items: [
+            { to: base, label: 'Overview', icon: i(LayoutDashboard), end: true, mobile: true },
+            { to: `${base}/files`, label: 'Reviews & files', short: 'Reviews', icon: i(Eye), mobile: true, badge: ctx.reviews, urgent: true },
+            { to: `${base}/board`, label: 'Progress board', short: 'Board', icon: i(Columns3), mobile: true },
+            { to: `${base}/messages`, label: 'Messages', icon: i(MessagesSquare), mobile: true, badge: ctx.unread },
+            { to: `${base}/calendar`, label: 'Calendar', icon: i(CalendarDays) },
+            { to: `${base}/content`, label: 'Content calendar', icon: i(Megaphone) },
+            { to: `${base}/sprints`, label: 'Sprints', icon: i(Rocket) },
+            { to: `${base}/team`, label: 'Your team', icon: i(Users) },
+          ],
+        },
+        me,
+      ];
+    }
   }
 }

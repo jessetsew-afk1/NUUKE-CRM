@@ -14,6 +14,8 @@ import { Agent } from '@/agent/Agent';
 import { Button, IconButton, ProgressBar, Sheet, spring, useClickOutside } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { ago, clock, duration, firstName, greeting, time } from '@/lib/format';
+import { defaultProject, usePendingReviews, useProjects, useUnread, useCurrentProject } from '@/data/projects';
+import { ReviewDot } from '@/projects/bits';
 import { navFor, type NavItem } from './nav';
 import { Logo } from './Logo';
 
@@ -22,7 +24,16 @@ const ROLE_LABEL = { admin: 'Admin', sales: 'Sales', production: 'Production', c
 export function Shell({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
   const location = useLocation();
-  const groups = useMemo(() => navFor(profile!.role), [profile]);
+  const role = profile!.role;
+  const projectsOn = role !== 'sales';
+  const projects = useProjects(projectsOn);
+  const pending = usePendingReviews(role === 'client');
+  const unread = useUnread(projectsOn);
+  const [current] = useCurrentProject();
+  const projectId = defaultProject(projects.data, pending.data, current)?.id ?? null;
+  const reviews = (pending.data ?? []).filter((f) => f.project_id === projectId).length;
+  const unreadCount = (unread.data ?? []).reduce((s, u) => s + (role !== 'client' || u.project_id === projectId ? Number(u.unread) : 0), 0);
+  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount }), [role, projectId, reviews, unreadCount]);
 
   return (
     <div className="relative z-10 min-h-dvh">
@@ -87,10 +98,21 @@ function SideLink({ item }: { item: NavItem }) {
             />
           )}
           <span className="relative">{item.icon}</span>
-          <span className="relative">{item.label}</span>
+          <span className="relative flex-1">{item.label}</span>
+          <NavBadge item={item} />
         </motion.div>
       )}
     </NavLink>
+  );
+}
+
+function NavBadge({ item, small }: { item: NavItem; small?: boolean }) {
+  if (!item.badge) return null;
+  if (item.urgent) return <ReviewDot size={small ? 'sm' : 'md'} count={item.badge} className="relative" />;
+  return (
+    <span className={clsx('relative grid min-w-[18px] place-items-center rounded-full bg-iris px-1 text-[10px] font-bold leading-[18px] text-white', small && 'scale-90')}>
+      {item.badge > 99 ? '99+' : item.badge}
+    </span>
   );
 }
 
@@ -388,7 +410,10 @@ function TabBar({ groups }: { groups: ReturnType<typeof navFor> }) {
             {({ isActive }) => (
               <motion.div whileTap={{ scale: 0.9 }} className={clsx('relative flex flex-col items-center gap-0.5 rounded-2xl py-1.5', isActive ? 'text-[color:var(--text)]' : 'text-3')}>
                 {isActive && <motion.span layoutId="tab-active" transition={spring} className="absolute inset-x-2 inset-y-0 rounded-2xl bg-[var(--fill-2)]" />}
-                <span className="relative">{item.icon}</span>
+                <span className="relative">
+                  {item.icon}
+                  {!!item.badge && <span className="absolute -right-2 -top-1.5"><NavBadge item={item} small /></span>}
+                </span>
                 <span className="relative text-[10px] font-bold">{item.short ?? item.label}</span>
               </motion.div>
             )}

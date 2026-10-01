@@ -19,7 +19,13 @@ const AnalyticsPage = lazy(() => import('@/pages/sales/AnalyticsPage'));
 const LeaderboardPage = lazy(() => import('@/pages/LeaderboardPage'));
 const AgentPage = lazy(() => import('@/pages/me/AgentPage'));
 const PayPage = lazy(() => import('@/pages/me/PayPage'));
-const ComingSoonPage = lazy(() => import('@/pages/ComingSoonPage'));
+const ProjectsPage = lazy(() => import('@/pages/ProjectsPage'));
+const ProjectPage = lazy(() => import('@/projects/ProjectPage'));
+const FileViewer = lazy(() => import('@/projects/FileViewer'));
+const WorkspacePage = lazy(() => import('@/pages/work/WorkspacePage'));
+const MyTasksPage = lazy(() => import('@/pages/work/MyTasksPage'));
+const WorkCalendarPage = lazy(() => import('@/pages/work/WorkCalendarPage'));
+const PortalPage = lazy(() => import('@/pages/portal/PortalPage'));
 const AdminHome = lazy(() => import('@/pages/admin/AdminHome'));
 const AdminSales = lazy(() => import('@/pages/admin/AdminSales'));
 const AdminLeads = lazy(() => import('@/pages/admin/AdminLeads'));
@@ -83,8 +89,13 @@ export default function App() {
             <Route path="/me/agent" element={<AgentPage />} />
             <Route path="/me/pay" element={<Only roles={STAFF}><PayPage /></Only>} />
 
-            <Route path="/work" element={<Only roles={['production']}><ComingSoonPage kind="production" /></Only>} />
-            <Route path="/portal" element={<Only roles={['client']}><ComingSoonPage kind="client" /></Only>} />
+            <Route path="/work" element={<Only roles={['production']}><WorkspacePage /></Only>} />
+            <Route path="/work/tasks" element={<Only roles={['production', 'admin']}><MyTasksPage /></Only>} />
+            <Route path="/work/calendar" element={<Only roles={['production', 'admin']}><WorkCalendarPage /></Only>} />
+            <Route path="/projects" element={<Only roles={['production', 'admin']}><ProjectsPage /></Only>} />
+            <Route path="/projects/:id/files/:fileId" element={<FileViewer />} />
+            <Route path="/projects/:id/:tab?" element={<ProjectPage />} />
+            <Route path="/portal/:tab?" element={<Only roles={['client']}><PortalPage /></Only>} />
 
             <Route path="/admin" element={<Only roles={A}><AdminHome /></Only>} />
             <Route path="/admin/sales" element={<Only roles={A}><AdminSales /></Only>} />
