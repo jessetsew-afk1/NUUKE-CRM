@@ -8,6 +8,14 @@
 [functions]
   node_bundler = "esbuild"
 
+# A page file that no longer exists (a tab left open across an update) gets a real
+# "not found", never index.html, so the app can notice and reload onto the new version.
+# Files that do exist are always served first; this only catches missing ones.
+[[redirects]]
+  from = "/assets/*"
+  to = "/404.html"
+  status = 404
+
 # Single-page app: every route is served by index.html.
 [[redirects]]
   from = "/*"

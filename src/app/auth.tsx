@@ -75,7 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (first && event === 'INITIAL_SESSION') { first = false; return; }
       if (event === 'TOKEN_REFRESHED') { setSession(s); return; }
       if (event === 'SIGNED_IN' && signingIn.current) return;
-      void load(s);
+      // Supabase asks that its own calls are not made inside this callback (they can wait
+      // on each other); running them a moment later avoids that entirely.
+      window.setTimeout(() => { void load(s); }, 0);
     });
     return () => sub.subscription.unsubscribe();
   }, [load]);

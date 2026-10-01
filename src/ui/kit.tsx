@@ -376,6 +376,16 @@ export function Pill({ tone = 'neutral', children, className, solid }: { tone?: 
 }
 
 /* =================================================================== Sheet */
+let openSheets = 0;
+function lockScroll() {
+  openSheets += 1;
+  document.body.style.overflow = 'hidden';
+  return () => {
+    openSheets = Math.max(0, openSheets - 1);
+    if (openSheets === 0) document.body.style.overflow = '';
+  };
+}
+
 /**
  * A modal that is a centred card on desktop and a bottom sheet on phones. Pass
  * `layoutId` to have it grow out of the element that opened it (iOS App Store style).
@@ -396,9 +406,8 @@ export function Sheet({
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+    const unlock = lockScroll();
+    return () => { document.removeEventListener('keydown', onKey); unlock(); };
   }, [open, onClose]);
 
   return (

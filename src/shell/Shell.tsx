@@ -16,6 +16,7 @@ import { useToast } from '@/ui/toast';
 import { ago, clock, duration, firstName, greeting, time } from '@/lib/format';
 import { defaultProject, usePendingReviews, useProjects, useUnread, useCurrentProject } from '@/data/projects';
 import { ReviewDot } from '@/projects/bits';
+import { ErrorBoundary } from '@/app/recovery';
 import { navFor, type NavItem } from './nav';
 import { Logo } from './Logo';
 
@@ -48,7 +49,8 @@ export function Shell({ children }: { children: ReactNode }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
           >
-            {children}
+            {/* One page failing never takes the menu or the rest of the app down with it. */}
+            <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
           </motion.div>
         </main>
       </div>
