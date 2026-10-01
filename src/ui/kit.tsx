@@ -340,16 +340,17 @@ export function Chip({
       transition={spring}
       onClick={onClick}
       aria-pressed={active}
+      title={typeof children === 'string' && children.length > 32 ? children : undefined}
       className={clsx(
-        'inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-[13px] font-semibold transition-colors',
+        'inline-flex h-9 max-w-full items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors',
         active ? 'bg-[var(--btn)] text-[color:var(--btn-text)]' : 'fill hover:bg-[var(--fill-2)]',
         className,
       )}
     >
-      {dot && <span className="size-2 rounded-full" style={{ background: dot }} />}
-      {children}
+      {dot && <span className="size-2 shrink-0 rounded-full" style={{ background: dot }} />}
+      <span className="min-w-0 max-w-[240px] truncate">{children}</span>
       {count !== undefined && (
-        <span className={clsx('tabular rounded-full px-1.5 text-[11px]', active ? 'bg-white/20' : 'bg-[var(--fill-2)]')}>{count}</span>
+        <span className={clsx('tabular shrink-0 rounded-full px-1.5 text-[11px]', active ? 'bg-white/20' : 'bg-[var(--fill-2)]')}>{count}</span>
       )}
     </motion.button>
   );
@@ -364,11 +365,12 @@ export function Pill({ tone = 'neutral', children, className, solid }: { tone?: 
   const c = toneColor[tone];
   return (
     <span
-      className={clsx('inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] font-semibold', className)}
+      className={clsx('inline-flex h-6 max-w-full items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] font-semibold', className)}
       style={solid ? { background: c, color: '#fff' } : { background: `${c}1F`, color: c }}
+      title={typeof children === 'string' && children.length > 32 ? children : undefined}
     >
-      {!solid && <span className="size-1.5 rounded-full" style={{ background: c }} />}
-      {children}
+      {!solid && <span className="size-1.5 shrink-0 rounded-full" style={{ background: c }} />}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }

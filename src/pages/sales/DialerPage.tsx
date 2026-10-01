@@ -150,14 +150,10 @@ function Setup({ filters, setFilters, onStart }: { filters: QueueFilters; setFil
           <div className="space-y-5">
             <FilterBlock label="Service">
               {options.isLoading && <Skeleton className="h-9 w-full" />}
-              {options.data?.services.map((s) => (
-                <Chip key={s.value} active={filters.services.includes(s.value)} onClick={() => toggle('services', s.value)} count={s.count}>{s.value}</Chip>
-              ))}
+              <ChipList items={options.data?.services ?? []} selected={filters.services} onToggle={(v) => toggle('services', v)} />
             </FilterBlock>
             <FilterBlock label="Lead platform">
-              {options.data?.platforms.map((s) => (
-                <Chip key={s.value} active={filters.platforms.includes(s.value)} onClick={() => toggle('platforms', s.value)} count={s.count}>{s.value}</Chip>
-              ))}
+              <ChipList items={options.data?.platforms ?? []} selected={filters.platforms} onToggle={(v) => toggle('platforms', v)} />
             </FilterBlock>
             <FilterBlock label="Enquiry date">
               {presets.map((p) => (
@@ -186,6 +182,37 @@ function QueueTile({ icon, label, value, color }: { icon: React.ReactNode; label
       <div className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color }}>{icon}{label}</div>
       <div className="tabular mt-1 text-[22px] font-extrabold leading-none">{value === undefined ? '–' : count(value)}</div>
     </div>
+  );
+}
+
+/**
+ * The busiest options first; the long tail (often one-off values typed into the sheet)
+ * folds behind "Show more" so it can never swamp the panel.
+ */
+function ChipList({ items, selected, onToggle, limit = 10 }: {
+  items: { value: string; count: number }[]; selected: string[]; onToggle: (v: string) => void; limit?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const sorted = [...items].sort((a, b) => b.count - a.count);
+  // Anything already picked stays visible even when folded.
+  const shown = open ? sorted : sorted.filter((s, i) => i < limit || selected.includes(s.value));
+  const hidden = sorted.length - shown.length;
+  return (
+    <>
+      {shown.map((s) => (
+        <Chip key={s.value} active={selected.includes(s.value)} onClick={() => onToggle(s.value)} count={s.count}>{s.value}</Chip>
+      ))}
+      {hidden > 0 && (
+        <button type="button" onClick={() => setOpen(true)} className="h-9 rounded-full px-3 text-[13px] font-bold text-iris hover:bg-[var(--fill)]">
+          Show {hidden} more
+        </button>
+      )}
+      {open && sorted.length > limit && (
+        <button type="button" onClick={() => setOpen(false)} className="text-2 h-9 rounded-full px-3 text-[13px] font-bold hover:bg-[var(--fill)]">
+          Show less
+        </button>
+      )}
+    </>
   );
 }
 
