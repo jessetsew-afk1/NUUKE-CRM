@@ -953,6 +953,7 @@ export type Database = {
       settings: {
         Row: {
           absent_alert_minutes: number
+          attendance_starts_on: string | null
           break_allowance_minutes: number
           commission_rate: number
           company_name: string
@@ -976,6 +977,7 @@ export type Database = {
         }
         Insert: {
           absent_alert_minutes?: number
+          attendance_starts_on?: string | null
           break_allowance_minutes?: number
           commission_rate?: number
           company_name?: string
@@ -999,6 +1001,7 @@ export type Database = {
         }
         Update: {
           absent_alert_minutes?: number
+          attendance_starts_on?: string | null
           break_allowance_minutes?: number
           commission_rate?: number
           company_name?: string

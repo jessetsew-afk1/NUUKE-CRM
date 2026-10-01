@@ -166,7 +166,8 @@ export default async (req: Request): Promise<Response> => {
           work_days: e.work_days ?? [1, 2, 3, 4, 5],
           daily_dial_target: e.daily_dial_target ?? 250,
           monthly_target_usd: e.monthly_target_usd ?? 0,
-          joined_on: e.joined_on ?? new Date().toISOString().slice(0, 10),
+          // Today in Pakistan, not in UTC (which is still yesterday until 5 am PKT).
+          joined_on: e.joined_on ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(new Date()),
         });
         if (empErr) {
           await db.auth.admin.deleteUser(id);

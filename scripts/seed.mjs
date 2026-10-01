@@ -237,6 +237,8 @@ async function main() {
   console.log(`Seeding ${URL_} …`);
   await sql.connect();
   await wipe();
+  // The demo has six weeks of history, so attendance has been tracked since before it.
+  await sql.query(`update public.settings set attendance_starts_on = (now() at time zone 'Asia/Karachi')::date - 60`);
 
   // People ---------------------------------------------------------------------
   const today = localDate();

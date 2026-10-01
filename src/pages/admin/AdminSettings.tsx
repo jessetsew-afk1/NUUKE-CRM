@@ -51,9 +51,11 @@ export default function AdminSettings() {
             <Input label="Break allowance (min)" type="number" {...num('break_allowance_minutes')} />
             <Input label="Auto sign-out after reminder (min)" type="number" {...num('signout_grace_minutes')} />
             <Input label="Alert me if not in after (min)" type="number" {...num('absent_alert_minutes')} />
+            <Input label="Track attendance from" type="date" value={form.attendance_starts_on ?? ''} hint="go-live day"
+              onChange={(e) => setForm({ ...form, attendance_starts_on: e.target.value || null })} />
           </div>
           <p className="text-3 mt-3 text-[12px]">
-            Today: under {form.grace_minutes} min late is on time · up to {form.short_day_max_minutes} is a short day · up to {form.half_day_max_minutes} is a half day · later counts as absent.
+            Nobody is marked absent before {form.attendance_starts_on ?? 'the start date'}. Under {form.grace_minutes} min late is on time · up to {form.short_day_max_minutes} is a short day · up to {form.half_day_max_minutes} is a half day · later counts as absent.
           </p>
         </Panel>
 

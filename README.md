@@ -89,7 +89,7 @@ Demo logins (password `NuukeDemo!2026`):
 | Sales | `zoya@nuuke.test`, `hamza@nuuke.test`, `sana@nuuke.test`, `bilal@nuuke.test`, `mehak@nuuke.test` |
 | Production | `faisal@nuuke.test`, `ayesha@nuuke.test`, `umar@nuuke.test` |
 
-`node scripts/check-rules.mjs` signs in as different people and checks 39 permission and business rules
+`node scripts/check-rules.mjs` signs in as different people and checks 38 permission and business rules
 (a rep cannot see a colleague's leads or pay, locked agent items are refused, and so on).
 
 ---

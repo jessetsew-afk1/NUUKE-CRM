@@ -23,6 +23,7 @@ export const DAY_STYLE: Record<PayrollDay['status'], { label: string; bg: string
   off: { label: 'Day off', bg: 'transparent', fg: 'var(--text-3)' },
   extra: { label: 'Extra day', bg: 'rgba(52,211,160,.16)', fg: '#1E9C75' },
   pending: { label: 'Today', bg: 'rgba(124,92,255,.10)', fg: '#7C5CFF' },
+  untracked: { label: 'Before go-live', bg: 'transparent', fg: 'var(--text-3)' },
 };
 
 function periodOptions(n = 6) {
@@ -140,11 +141,11 @@ export function Calendar({ days, start, end }: { days: PayrollDay[]; start: stri
               transition={{ delay: i * 0.012 }}
               onPointerEnter={() => setHover(iso)}
               onPointerLeave={() => setHover(null)}
-              className={clsx('relative aspect-square rounded-2xl p-1.5 text-left', future ? 'fill opacity-50' : !st || d?.status === 'off' ? 'fill' : '', iso === today && 'ring-2 ring-iris')}
-              style={st && d?.status !== 'off' ? { background: st.bg } : undefined}
+              className={clsx('relative aspect-square rounded-2xl p-1.5 text-left', future ? 'fill opacity-50' : !st || d?.status === 'off' || d?.status === 'untracked' ? 'fill' : '', d?.status === 'untracked' && 'opacity-60', iso === today && 'ring-2 ring-iris')}
+              style={st && d?.status !== 'off' && d?.status !== 'untracked' ? { background: st.bg } : undefined}
             >
               <div className="tabular text-[13px] font-extrabold">{format(parseISO(iso), 'd')}</div>
-              {d && d.status !== 'off' && (
+              {d && d.status !== 'off' && d.status !== 'untracked' && (
                 <div className="mt-0.5 hidden truncate text-[10px] font-bold leading-tight sm:block" style={{ color: st!.fg }}>
                   {d.deduction_days > 0 ? `−${d.deduction_days}d` : d.status === 'short' && d.note ? 'warning' : st!.label}
                 </div>
@@ -240,6 +241,7 @@ function Rules({ settings, isSales }: { settings: ReturnType<typeof useSettings>
         <ul className="text-2 mt-3 list-disc space-y-1.5 pl-5 text-[13px]">
           <li>A day's pay is your monthly salary divided by your scheduled working days in the period.</li>
           <li>Absent with no leave: <b>one day</b> deducted.</li>
+          {s.attendance_starts_on && <li>Attendance is counted from <b>{format(parseISO(s.attendance_starts_on), 'd MMMM yyyy')}</b>, the day NUUKE went live. Days before that are never deducted.</li>}
           <li>{s.grace_minutes}–{s.short_day_max_minutes} min late is a <b>short day</b>. The first {s.free_short_days === 1 ? 'one is' : `${s.free_short_days} are`} a warning; every one after deducts a full day.</li>
           <li>Up to {s.half_day_max_minutes} min late is a <b>half day</b>. The first {s.reduced_half_days === 1 ? 'one costs' : `${s.reduced_half_days} cost`} half a day; every one after deducts a full day.</li>
           <li>More than {s.half_day_max_minutes} min late counts as absent.</li>
