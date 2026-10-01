@@ -133,7 +133,7 @@ function LeadRow({
         </div>
         <div className="text-2 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px]">
           {lead.phone && <span className="tabular inline-flex items-center gap-1 font-mono"><Phone className="size-3" />{lead.phone}</span>}
-          {lead.service && <span>{lead.service}</span>}
+          {lead.service && <span className="max-w-[260px] truncate" title={lead.service}>{lead.service}</span>}
           {lead.platform && <span className="text-3">{lead.platform}</span>}
           <span className="text-3">Enquired {dayShort(lead.lead_date)}</span>
         </div>
