@@ -54,6 +54,27 @@ function adminClient(): SupabaseClient {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
+/** Catches the usual Netlify mix-up: the publishable/anon key pasted where the secret one goes. */
+function keyProblem(): string | null {
+  const key = (process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim().replace(/^['"]+|['"]+$/g, '');
+  if (key.startsWith('sb_secret_')) return null;
+  if (key.startsWith('sb_publishable_')) {
+    return 'SUPABASE_SECRET_KEY in Netlify holds the publishable key. Paste the secret key (it starts with sb_secret_) from Supabase → Project Settings → API Keys, then redeploy.';
+  }
+  const claims = key.split('.')[1];
+  if (claims) {
+    try {
+      const role = JSON.parse(Buffer.from(claims, 'base64url').toString()).role;
+      if (role && role !== 'service_role') {
+        return `SUPABASE_SECRET_KEY in Netlify holds the "${role}" key. Use the secret (service_role) key from Supabase → Project Settings → API Keys, then redeploy.`;
+      }
+    } catch {
+      /* not a JWT — let Supabase judge it */
+    }
+  }
+  return null;
+}
+
 function validPassword(p: unknown): p is string {
   return typeof p === 'string' && p.length >= 8;
 }
@@ -68,17 +89,24 @@ export default async (req: Request): Promise<Response> => {
     return json(500, { error: (err as Error).message });
   }
 
+  const misconfigured = keyProblem();
+  if (misconfigured) return json(500, { error: misconfigured });
+
   // Who is calling?
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return json(401, { error: 'Sign in first' });
   const { data: caller, error: callerErr } = await db.auth.getUser(token);
   if (callerErr || !caller.user) return json(401, { error: 'Your session has expired — sign in again' });
-  const { data: callerProfile } = await db
+  const { data: callerProfile, error: profileErr } = await db
     .from('profiles')
     .select('role, is_active')
     .eq('id', caller.user.id)
     .maybeSingle();
-  if (callerProfile?.role !== 'admin' || !callerProfile.is_active) {
+  if (profileErr) return json(500, { error: `Could not read your profile: ${profileErr.message}` });
+  if (!callerProfile) {
+    return json(403, { error: 'Your login has no NUUKE profile in this database. Run select public.bootstrap_admin(...) in the Supabase SQL editor.' });
+  }
+  if (callerProfile.role !== 'admin' || !callerProfile.is_active) {
     return json(403, { error: 'Only an admin can manage logins' });
   }
 
