@@ -79,7 +79,7 @@ export interface LeaderRow {
 
 export interface PayrollDay {
   date: string;
-  status: 'present' | 'short' | 'half' | 'absent' | 'late_absent' | 'paid_leave' | 'unpaid_leave' | 'holiday' | 'off' | 'extra' | 'pending';
+  status: 'present' | 'short' | 'half' | 'absent' | 'late_absent' | 'paid_leave' | 'unpaid_leave' | 'holiday' | 'off' | 'extra' | 'pending' | 'untracked';
   deduction_days: number;
   note: string | null;
   late_minutes: number;

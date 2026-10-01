@@ -25,6 +25,7 @@ const STATE: Record<string, { label: string; tone: Tone; order: number }> = {
   unpaid_leave: { label: 'Unpaid leave', tone: 'neutral', order: 5 },
   holiday: { label: 'Holiday', tone: 'iris', order: 5 },
   absent_override: { label: 'Marked absent', tone: 'bad', order: 5 },
+  untracked: { label: 'Before go-live', tone: 'neutral', order: 6 },
 };
 
 export default function AdminAttendance() {

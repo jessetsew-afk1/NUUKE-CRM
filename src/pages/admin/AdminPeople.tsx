@@ -11,7 +11,7 @@ import { Agent } from '@/agent/Agent';
 import { normaliseAgent } from '@/agent/catalog';
 import { Button, Input, Label, PageHeader, Panel, Picker, Pill, Segmented, Sheet, Skeleton, Switch, type Tone } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
-import { ago, count, pkr, usd } from '@/lib/format';
+import { ago, count, localISO, pkr, usd } from '@/lib/format';
 
 const ROLE: Record<Role, { label: string; tone: Tone; hint: string }> = {
   admin: { label: 'Admin', tone: 'great', hint: 'Everything, including logins, pay and leads' },
@@ -133,7 +133,7 @@ function PersonSheet({ person, onClose }: { person: Person | 'new' | null; onClo
       salary: e?.monthly_salary_pkr ? String(e.monthly_salary_pkr) : '', tracks: e?.tracks_attendance ?? true,
       shift_start: (e?.shift_start ?? '18:00').slice(0, 5), shift_hours: String((e?.shift_minutes ?? 540) / 60),
       work_days: e?.work_days ?? [1, 2, 3, 4, 5], dial_target: String(e?.daily_dial_target ?? 250),
-      target_usd: e?.monthly_target_usd ? String(e.monthly_target_usd) : '', joined_on: e?.joined_on ?? new Date().toISOString().slice(0, 10),
+      target_usd: e?.monthly_target_usd ? String(e.monthly_target_usd) : '', joined_on: e?.joined_on ?? localISO(),
       active: p?.is_active ?? true,
     } : null);
   }
