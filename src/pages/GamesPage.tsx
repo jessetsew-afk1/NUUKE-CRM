@@ -83,12 +83,12 @@ export default function GamesPage() {
   if (play.loading) return <Skeleton className="h-[520px] rounded-[28px]" />;
   if (!play.canPlay) return <Locked games={games.data} uid={uid} />;
   if (openId) return <GameView id={openId} onBack={() => open(null)} onOpen={open} />;
-  return <Lobby games={games.data} loading={games.isLoading} uid={uid} onOpen={open} admin={play.admin} />;
+  return <Lobby games={games.data} loading={games.isLoading} uid={uid} onOpen={open} alwaysOpen={play.alwaysOpen} />;
 }
 
 /* ================================================================ locked */
 function Locked({ games, uid }: { games?: GameWithPlayers[]; uid: string }) {
-  const { agent, tracksAttendance } = useAuth();
+  const { agent } = useAuth();
   const { state, startBreak } = useAttendance();
   const toast = useToast();
   const { invites, myTurn } = gamesNeedingMe(games, uid);
@@ -99,10 +99,8 @@ function Locked({ games, uid }: { games?: GameWithPlayers[]; uid: string }) {
       <Panel>
         <Empty art={<Agent config={agent} size={140} mood="sleepy" />}
           title="Games open on your break"
-          body={!tracksAttendance
-            ? 'Your account isn\'t on the attendance clock, so there\'s no break time to play in. Ask your admin if you think that\'s wrong.'
-            : `Take a break and the games unlock. Every game waits for you between breaks${waiting ? `, and right now you have ${waiting}` : ''}.`}
-          action={tracksAttendance && (state?.clocked_in
+          body={`Take a break and the games unlock. Every game waits for you between breaks${waiting ? `, and right now you have ${waiting}` : ''}.`}
+          action={(state?.clocked_in
             ? <Button variant="iris" size="lg" icon={<Coffee className="size-5" />} loading={startBreak.isPending}
                 onClick={() => startBreak.mutate(undefined, { onError: (e) => toast({ title: 'Could not start your break', body: (e as Error).message, tone: 'danger' }) })}>
                 Start my break
@@ -122,7 +120,7 @@ function Locked({ games, uid }: { games?: GameWithPlayers[]; uid: string }) {
 }
 
 /* ================================================================= lobby */
-function Lobby({ games, loading, uid, onOpen, admin }: { games?: GameWithPlayers[]; loading: boolean; uid: string; onOpen: (id: number) => void; admin: boolean }) {
+function Lobby({ games, loading, uid, onOpen, alwaysOpen }: { games?: GameWithPlayers[]; loading: boolean; uid: string; onOpen: (id: number) => void; alwaysOpen: boolean }) {
   const people = usePeople();
   const byId = useMemo(() => new Map((people.data ?? []).map((p) => [p.id, p])), [people.data]);
   const onBreak = useOnBreak();
@@ -153,8 +151,11 @@ function Lobby({ games, loading, uid, onOpen, admin }: { games?: GameWithPlayers
 
   return (
     <>
-      <PageHeader title="Mini Games" sub="You're on your break, so the games are open. Invite anyone on the team; they can join on their break."
-        right={<Pill tone="good" solid><span className="inline-flex items-center gap-1"><Coffee className="size-3.5" />{admin ? 'Always open for admins' : 'On break'}</span></Pill>} />
+      <PageHeader title="Mini Games"
+        sub={alwaysOpen
+          ? 'Your time isn\'t on the attendance clock, so the games are always open for you. Invite anyone on the team; they can join on their break.'
+          : 'You\'re on your break, so the games are open. Invite anyone on the team; they can join on their break.'}
+        right={<Pill tone="good" solid><span className="inline-flex items-center gap-1"><Coffee className="size-3.5" />{alwaysOpen ? 'Always open for you' : 'On break'}</span></Pill>} />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {KINDS.map((k, i) => (
@@ -285,7 +286,7 @@ function NewGameSheet({ kind, onClose, people, onBreak, uid, onCreated }: {
           </Button>
         </div>
       )}>
-      <p className="text-2 mb-3 text-[13px]">People on a break right now are at the top. Anyone else gets the invite and can join when their break starts.</p>
+      <p className="text-2 mb-3 text-[13px]">People free to play right now are at the top. Anyone else gets the invite and can join when their break starts.</p>
       <div className="max-h-[52vh] space-y-1.5 overflow-y-auto pr-1">
         {team.map((p) => {
           const on = chosen.includes(p.id);
@@ -298,7 +299,7 @@ function NewGameSheet({ kind, onClose, people, onBreak, uid, onCreated }: {
                 <div className="truncate text-[14px] font-bold">{p.full_name}</div>
                 <div className="text-3 truncate text-[12px]">{p.title || p.role}</div>
               </div>
-              {free ? <Pill tone="good"><span className="inline-flex items-center gap-1"><span className="size-1.5 rounded-full bg-ok" />On break</span></Pill> : <span className="text-3 shrink-0 text-[12px] font-semibold">Not on break</span>}
+              {free ? <Pill tone="good"><span className="inline-flex items-center gap-1"><span className="size-1.5 rounded-full bg-ok" />Free now</span></Pill> : <span className="text-3 shrink-0 text-[12px] font-semibold">Not on break</span>}
               <span className={clsx('grid size-6 place-items-center rounded-full', on ? 'bg-iris text-white' : 'ring-1 ring-[var(--hairline)]')}>{on && <Check className="size-3.5" />}</span>
             </button>
           );
@@ -364,7 +365,7 @@ function GameView({ id, onBack, onOpen }: { id: number; onBack: () => void; onOp
   const kind = g.kind as GameKind;
   const info = GAME_INFO[kind];
   const turnName = firstName(byId.get(g.turn_user ?? ''));
-  const opponentOnBreak = g.turn_user && g.turn_user !== uid ? onBreak.data?.has(g.turn_user) || byId.get(g.turn_user)?.role === 'admin' : true;
+  const opponentOnBreak = g.turn_user && g.turn_user !== uid ? onBreak.data?.has(g.turn_user) : true;
   const winner = byId.get(g.winner_id ?? '');
   const joined = players.filter((p) => p.status === 'joined');
 
@@ -448,7 +449,7 @@ function GameView({ id, onBack, onOpen }: { id: number; onBack: () => void; onOp
               {players.map((p) => {
                 const prof = byId.get(p.user_id);
                 const turn = g.status === 'active' && g.turn_user === p.user_id;
-                const free = onBreak.data?.has(p.user_id) || prof?.role === 'admin';
+                const free = onBreak.data?.has(p.user_id);
                 return (
                   <div key={p.user_id} className={clsx('flex items-center gap-3 rounded-[18px] p-2.5 transition-colors', turn ? 'bg-iris/12 ring-2 ring-iris/40' : 'fill', p.status === 'left' && 'opacity-50')}>
                     {prof ? <Agent config={normaliseAgent(prof.avatar, prof.id)} size={40} animated={turn} /> : <Spinner />}
@@ -456,7 +457,7 @@ function GameView({ id, onBack, onOpen }: { id: number; onBack: () => void; onOp
                       <div className="truncate text-[14px] font-bold">{p.user_id === uid ? 'You' : prof?.full_name ?? '…'}</div>
                       <div className="text-3 flex items-center gap-1.5 text-[12px] font-semibold">
                         <Mark kind={kind} seat={p.seat} state={g.state as unknown} />
-                        {p.status === 'invited' ? 'invited' : p.status === 'left' ? 'left' : free ? <span className="text-ok">on break</span> : 'not on break'}
+                        {p.status === 'invited' ? 'invited' : p.status === 'left' ? 'left' : free ? <span className="text-ok">free to play</span> : 'not on break'}
                       </div>
                     </div>
                     {turn && <motion.span animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 1.2, repeat: Infinity }}><Gamepad2 className="size-4 text-iris" /></motion.span>}
@@ -472,7 +473,7 @@ function GameView({ id, onBack, onOpen }: { id: number; onBack: () => void; onOp
               {kind === 'checkers' && <><li>Red goes first. Move diagonally forward; kings move both ways.</li><li>If you can jump, you must, and keep jumping while you can.</li></>}
               {kind === 'chess' && <><li>White goes first. Tap a piece to see where it can go.</li><li>Checkmate wins. Stalemate and repeated positions are draws.</li></>}
               {kind === 'ludo' && <><li>Roll a 6 to bring a token out. A 6 or a knock-out earns another roll.</li><li>Stars and start squares are safe. Get all four home to win.</li></>}
-              <li>Moves only count on your break. The game waits for you in between.</li>
+              <li>Moves only count on a break (unless your time isn't tracked). The game waits in between.</li>
             </ul>
           </Panel>
         </div>
