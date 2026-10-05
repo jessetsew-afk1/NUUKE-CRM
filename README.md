@@ -46,8 +46,9 @@ agent for every person who signs in.
 
 **Everyone on the team: Mini Games**
 - Tic-Tac-Toe, Checkers, Chess and Ludo (2 to 4 players), in simple 2D.
-- **Break time only.** The games unlock when you start a break and lock again when it ends. Admins aren't on the clock, so they can always play.
-- **Invite anyone.** People on a break right now are listed first. Everyone else gets a notification and can join on their break.
+- **Break time only.** The games unlock when you start a break and lock again when it ends.
+  - Admins, and anyone whose attendance isn't tracked, have no breaks, so they can play any time.
+- **Invite anyone.** People free to play right now are listed first. Everyone else gets a notification and can join on their break.
 - Games wait between breaks: a move only counts while you're on a break, so a chess game can run over several days.
 - The database checks every move: whose turn it is, that you're on a break, and that nobody moved in between. It also rolls the Ludo dice, so nobody picks their own number.
 - Invites nobody answers lapse after 3 hours; a game nobody touches for a week ends.
@@ -145,7 +146,7 @@ Demo logins (password `NuukeDemo!2026`):
 | Production | `faisal@nuuke.test`, `ayesha@nuuke.test`, `umar@nuuke.test` |
 | Clients | `sarah@halcyon.test` (two projects), `leo@brightbrew.test` |
 
-`node scripts/check-rules.mjs` signs in as different people and checks 108 permission and business rules.
+`node scripts/check-rules.mjs` signs in as different people and checks 112 permission and business rules.
 For example:
 - a rep cannot see a colleague's leads or pay
 - a client never sees internal tasks, files, or another client's project
@@ -201,6 +202,7 @@ For example:
 - `20261001001000_projects.sql` adds projects, the client portal and file storage.
 - `20261005000100_dialer_meetings.sql` adds lead editing, meeting time zones, technical managers and recycling.
 - `20261005000200_quick_messages_games.sql` adds quick messages and Mini Games.
+- `20261005000300_games_untracked_anytime.sql` lets people whose attendance isn't tracked play any time.
 
 ---
 

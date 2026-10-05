@@ -15,14 +15,19 @@ export const GAME_INFO: Record<GameKind, { label: string; players: string; blurb
   ludo: { label: 'Ludo', players: '2 to 4 players', blurb: 'Roll a 6 to get out, race everyone home.', max: 3 },
 };
 
-/** Break time is game time. Admins aren't on the clock, so they can always play. */
+/**
+ * Break time is game time. Admins, and anyone whose attendance isn't tracked, have no
+ * breaks to wait for, so they can always play.
+ */
 export function useCanPlay() {
   const { profile, tracksAttendance } = useAuth();
   const { state, loading } = useAttendance();
   const admin = profile?.role === 'admin';
+  const alwaysOpen = admin || !tracksAttendance;
   return {
-    canPlay: admin || (tracksAttendance && !!state?.on_break),
-    loading: !admin && tracksAttendance && loading,
+    canPlay: alwaysOpen || !!state?.on_break,
+    loading: !alwaysOpen && loading,
+    alwaysOpen,
     admin,
     clockedIn: !!state?.clocked_in,
     tracksAttendance,
@@ -72,7 +77,7 @@ export function useGame(id: number | null) {
   return q;
 }
 
-/** Teammates on a break right now. */
+/** Teammates free to play right now: on a break, or not on the attendance clock at all. */
 export function useOnBreak(enabled = true) {
   return useQuery({
     queryKey: ['on-break'],

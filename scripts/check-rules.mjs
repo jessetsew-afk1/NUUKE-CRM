@@ -384,6 +384,18 @@ const faisal = await as('faisal@nuuke.test');
   ok(hamzaSeat.status === 'declined', 'Anyone who had not joined is dropped when Ludo starts');
   await zoya.c.rpc('game_leave', { p_game_id: lid });
 
+  // Not on the attendance clock: no breaks, so games are always open
+  const umar = await as('umar@nuuke.test');
+  await service.from('employment').update({ tracks_attendance: false }).eq('profile_id', umar.id);
+  const { data: uid1, error: e15 } = await umar.c.rpc('game_create', { p_kind: 'chess', p_invitees: [faisal.id], p_state: {} });
+  ok(!e15 && uid1 > 0, 'Someone whose attendance is not tracked can play any time', e15?.message);
+  const { data: free } = await zoya.c.rpc('players_on_break');
+  ok(free.includes(umar.id) && !free.includes(hamza.id), 'They show as free to play; tracked people off a break do not');
+  await umar.c.rpc('game_leave', { p_game_id: uid1 });
+  await service.from('employment').update({ tracks_attendance: true }).eq('profile_id', umar.id);
+  const { error: e16 } = await umar.c.rpc('game_create', { p_kind: 'chess', p_invitees: [faisal.id], p_state: {} });
+  ok(!!e16 && /break/i.test(e16.message), 'Once their attendance is tracked again, games wait for a break', e16?.message);
+
   await zoya.c.rpc('end_break');
   await hamza.c.rpc('clock_out');
 }
