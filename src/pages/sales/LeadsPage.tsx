@@ -12,6 +12,7 @@ import { Agent } from '@/agent/Agent';
 import { Empty, Input, PageHeader, Panel, Picker, Pill, Segmented, Sheet, Skeleton, Spinner, type Tone } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { LeadCard } from '@/sales/LeadCard';
+import { OutreachPanel } from '@/sales/OutreachPanel';
 import { OutcomeForm, type OutcomePayload } from '@/sales/OutcomeForm';
 import { ago, count, dayShort, friendly } from '@/lib/format';
 import { celebrate } from '@/lib/celebrate';
@@ -162,7 +163,9 @@ export function AttemptDots({ n, max }: { n: number; max: number }) {
   );
 }
 
-export function LeadDetail({ lead, onDone }: { lead: Lead; onDone: () => void }) {
+export function LeadDetail({ lead: initial, onDone }: { lead: Lead; onDone: () => void }) {
+  const [lead, setLead] = useState(initial);
+  if (initial.id !== lead.id) setLead(initial);
   const outcomes = useOutcomes();
   const settings = useSettings();
   const refresh = useSalesRefresh();
@@ -187,11 +190,20 @@ export function LeadDetail({ lead, onDone }: { lead: Lead; onDone: () => void })
 
   return (
     <div className="grid gap-6 pt-4 lg:grid-cols-[1.2fr_1fr]">
-      <LeadCard lead={lead} outcomes={map} maxAttempts={settings.data?.max_attempts ?? 4} compact />
+      <div className="space-y-5">
+        <LeadCard lead={lead} outcomes={map} maxAttempts={settings.data?.max_attempts ?? 4} compact onEdited={setLead} />
+        <OutreachPanel lead={lead} />
+      </div>
       {lead.stage === 'closed' && !['contact_not_established', 'voicemail', 'contact_established'].includes(lead.status) ? (
         <div className="fill h-fit rounded-[24px] p-5 text-[14px]">
-          <b>This lead is closed</b> ({map.get(lead.status)?.label ?? lead.closed_reason}).
-          <p className="text-2 mt-1">Ask your admin to recycle it if it deserves another round.</p>
+          <b>This lead is resting</b> ({lead.closed_reason === 'exhausted' ? 'no answer after all follow-ups' : map.get(lead.status)?.label ?? lead.closed_reason}).
+          <p className="text-2 mt-1">
+            {lead.closed_reason === 'do_not_call' ? 'They asked not to be called — it never comes back.'
+              : lead.closed_reason === 'won' ? 'Closed won — they are a client now.'
+                : (settings.data?.recycle_after_days ?? 2) > 0
+                  ? `It comes back to your queue for a fresh round ${lead.closed_at ? `around ${new Date(Date.parse(lead.closed_at) + (settings.data?.recycle_after_days ?? 2) * 864e5).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'soon'}.`
+                  : 'Ask your admin to recycle it if it deserves another round.'}
+          </p>
         </div>
       ) : (
         <div className="fill h-fit rounded-[24px] p-5">

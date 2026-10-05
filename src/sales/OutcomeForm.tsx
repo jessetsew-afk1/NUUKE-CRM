@@ -3,9 +3,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
 import { ArrowRight, CalendarClock, Info, SkipForward } from 'lucide-react';
 import type { Lead, LeadOutcome } from '@/lib/types';
-import { OUTCOME_TONE } from '@/data/sales';
-import { Button, Input, Kbd, Label, Picker, Segmented, Textarea, toneColor, type PickerOption } from '@/ui/kit';
+import { OUTCOME_TONE, type MeetingExtras } from '@/data/sales';
+import { useSettings } from '@/data/common';
+import { Button, Input, Kbd, Label, Picker, Textarea, toneColor, type PickerOption } from '@/ui/kit';
 import { friendly, toLocalInput } from '@/lib/format';
+import { MeetingFields, draftExtras, draftForLead, draftStartsAt, type MeetingDraft } from './MeetingFields';
 
 export interface OutcomePayload {
   outcome: string;
@@ -14,6 +16,7 @@ export interface OutcomePayload {
   meetingAt: string | null;
   meetingMinutes: number;
   dealAmount: number | null;
+  meeting: MeetingExtras | null;
 }
 
 const GROUPS: Record<string, string> = {
@@ -55,15 +58,18 @@ export function OutcomeForm({
   const [comment, setComment] = useState('');
   const [followup, setFollowup] = useState('');
   const [customFollowup, setCustomFollowup] = useState(false);
-  const [meetingAt, setMeetingAt] = useState('');
-  const [meetingMinutes, setMeetingMinutes] = useState('30');
+  const [meeting, setMeeting] = useState<MeetingDraft>(() => draftForLead(lead));
+  const [zoneWhy, setZoneWhy] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
+  const settings = useSettings();
+  const recycleDays = settings.data?.recycle_after_days ?? 2;
   const [error, setError] = useState<string | null>(null);
   const commentRef = useRef<HTMLTextAreaElement>(null);
 
   // A fresh card means a fresh form.
   useEffect(() => {
-    setOutcome(null); setComment(''); setFollowup(''); setCustomFollowup(false); setMeetingAt(''); setAmount(''); setError(null);
+    const d = draftForLead(lead);
+    setOutcome(null); setComment(''); setFollowup(''); setCustomFollowup(false); setMeeting(d); setZoneWhy(d.why); setAmount(''); setError(null);
     // Leave the notes box so the number shortcuts work straight away on the new card.
     if (autoFocusKeys && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }, [lead.id, autoFocusKeys]);
@@ -82,6 +88,7 @@ export function OutcomeForm({
     if (!o) { setError('Choose how the call went'); return; }
     const iso = (v: string) => (v ? new Date(v).toISOString() : null);
     if (o.effect === 'callback' && !followup) { setError('Pick when to call them back'); return; }
+    const meetingAt = o.key === 'meeting_booked' ? draftStartsAt(meeting) : null;
     if (o.key === 'meeting_booked' && !meetingAt) { setError('Pick the meeting date and time'); return; }
     const amt = amount ? Number(amount.replace(/[^\d.]/g, '')) : null;
     if (o.key === 'won' && !(amt && amt > 0)) { setError('Enter the amount you closed'); return; }
@@ -89,9 +96,10 @@ export function OutcomeForm({
       outcome: o.key,
       comment: comment.trim() || null,
       followupAt: o.effect === 'callback' || customFollowup || o.effect === 'pipeline' ? iso(followup) : null,
-      meetingAt: o.key === 'meeting_booked' ? iso(meetingAt) : null,
-      meetingMinutes: Number(meetingMinutes),
+      meetingAt,
+      meetingMinutes: Number(meeting.minutes),
       dealAmount: amt,
+      meeting: o.key === 'meeting_booked' ? draftExtras(meeting) : null,
     });
   };
 
@@ -160,16 +168,7 @@ export function OutcomeForm({
                 <WhenField label="Call them back" value={followup} onChange={setFollowup} presets={presetsCallback()} />
               )}
 
-              {o.key === 'meeting_booked' && (
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <Input label="Meeting time" type="datetime-local" value={meetingAt} onChange={(e) => setMeetingAt(e.target.value)} />
-                  <div>
-                    <Label>Length</Label>
-                    <Segmented value={meetingMinutes} onChange={setMeetingMinutes}
-                      options={[{ value: '15', label: '15m' }, { value: '30', label: '30m' }, { value: '45', label: '45m' }, { value: '60', label: '1h' }]} />
-                  </div>
-                </div>
-              )}
+              {o.key === 'meeting_booked' && <MeetingFields draft={meeting} onChange={setMeeting} why={zoneWhy} />}
 
               {o.pipeline_stage && (
                 <Input
@@ -192,7 +191,7 @@ export function OutcomeForm({
                   <CalendarClock className="size-4 text-iris" />
                   <span className="flex-1">
                     {lastTry
-                      ? <>This was call <b>{attemptNo} of {maxAttempts}</b> — the lead will be closed as exhausted.</>
+                      ? <>This was call <b>{attemptNo} of {maxAttempts}</b> — the lead rests{recycleDays > 0 ? <> and comes back in <b>{recycleDays} day{recycleDays === 1 ? '' : 's'}</b></> : ''}.</>
                       : <>Comes back for <b>follow-up {attemptNo + 1} of {maxAttempts}</b> on your next shift.</>}
                   </span>
                   <button type="button" className="font-bold text-iris" onClick={() => setCustomFollowup(true)}>Pick a time</button>
@@ -202,9 +201,17 @@ export function OutcomeForm({
                 <WhenField label="Call again" value={followup} onChange={setFollowup} presets={presetsCallback()} />
               )}
 
-              {o.effect === 'closed' && o.key !== 'won' && (
+              {o.effect === 'closed' && o.key === 'do_not_call' && (
                 <div className="flex items-center gap-2 rounded-2xl bg-bad/10 px-3.5 py-2.5 text-[13px] font-medium text-bad">
-                  <Info className="size-4" /> This lead leaves your queue for good.
+                  <Info className="size-4" /> Never called again — this lead stays off every queue for good.
+                </div>
+              )}
+              {o.effect === 'closed' && o.key !== 'won' && o.key !== 'do_not_call' && (
+                <div className="flex items-center gap-2 rounded-2xl bg-warn/12 px-3.5 py-2.5 text-[13px] font-medium text-warn">
+                  <Info className="size-4" />
+                  {recycleDays > 0
+                    ? <>Leaves your queue now and comes back for a fresh round in <b>{recycleDays} day{recycleDays === 1 ? '' : 's'}</b>, with today's notes on the card.</>
+                    : <>Leaves your queue. The admin can bring it back later.</>}
                 </div>
               )}
             </div>

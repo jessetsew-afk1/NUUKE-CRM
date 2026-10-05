@@ -735,6 +735,7 @@ export type Database = {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          closed_at: string | null
           closed_reason: string | null
           connected: boolean
           country: string | null
@@ -753,7 +754,9 @@ export type Database = {
           phone_key: string | null
           platform: string | null
           post_link: string | null
+          previous_round: Json | null
           query: string | null
+          recycle_count: number
           service: string | null
           skipped_at: string | null
           stage: string
@@ -765,6 +768,7 @@ export type Database = {
           assigned_at?: string | null
           assigned_to?: string | null
           attempts?: number
+          closed_at?: string | null
           closed_reason?: string | null
           connected?: boolean
           country?: string | null
@@ -783,7 +787,9 @@ export type Database = {
           phone_key?: string | null
           platform?: string | null
           post_link?: string | null
+          previous_round?: Json | null
           query?: string | null
+          recycle_count?: number
           service?: string | null
           skipped_at?: string | null
           stage?: string
@@ -795,6 +801,7 @@ export type Database = {
           assigned_at?: string | null
           assigned_to?: string | null
           attempts?: number
+          closed_at?: string | null
           closed_reason?: string | null
           connected?: boolean
           country?: string | null
@@ -813,7 +820,9 @@ export type Database = {
           phone_key?: string | null
           platform?: string | null
           post_link?: string | null
+          previous_round?: Json | null
           query?: string | null
+          recycle_count?: number
           service?: string | null
           skipped_at?: string | null
           stage?: string
@@ -879,6 +888,8 @@ export type Database = {
       }
       meetings: {
         Row: {
+          client_links: string | null
+          client_website: string | null
           created_at: string
           deal_id: number | null
           duration_minutes: number
@@ -887,13 +898,19 @@ export type Database = {
           location: string | null
           notes: string | null
           owner_id: string
+          prep_notes: string | null
           reminded_at: string | null
           starts_at: string
           status: string
+          technical_manager_id: string | null
+          timezone: string | null
           title: string
+          transcript: string | null
           updated_at: string
         }
         Insert: {
+          client_links?: string | null
+          client_website?: string | null
           created_at?: string
           deal_id?: number | null
           duration_minutes?: number
@@ -902,13 +919,19 @@ export type Database = {
           location?: string | null
           notes?: string | null
           owner_id?: string
+          prep_notes?: string | null
           reminded_at?: string | null
           starts_at: string
           status?: string
+          technical_manager_id?: string | null
+          timezone?: string | null
           title: string
+          transcript?: string | null
           updated_at?: string
         }
         Update: {
+          client_links?: string | null
+          client_website?: string | null
           created_at?: string
           deal_id?: number | null
           duration_minutes?: number
@@ -917,10 +940,14 @@ export type Database = {
           location?: string | null
           notes?: string | null
           owner_id?: string
+          prep_notes?: string | null
           reminded_at?: string | null
           starts_at?: string
           status?: string
+          technical_manager_id?: string | null
+          timezone?: string | null
           title?: string
+          transcript?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -941,6 +968,13 @@ export type Database = {
           {
             foreignKeyName: "meetings_owner_id_fkey"
             columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meetings_technical_manager_id_fkey"
+            columns: ["technical_manager_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1042,6 +1076,7 @@ export type Database = {
           full_name: string
           id: string
           is_active: boolean
+          is_technical_manager: boolean
           phone: string | null
           role: Database["public"]["Enums"]["app_role"]
           title: string | null
@@ -1055,6 +1090,7 @@ export type Database = {
           full_name: string
           id: string
           is_active?: boolean
+          is_technical_manager?: boolean
           phone?: string | null
           role: Database["public"]["Enums"]["app_role"]
           title?: string | null
@@ -1068,6 +1104,7 @@ export type Database = {
           full_name?: string
           id?: string
           is_active?: boolean
+          is_technical_manager?: boolean
           phone?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           title?: string | null
@@ -1442,9 +1479,12 @@ export type Database = {
         Row: {
           absent_alert_minutes: number
           attendance_starts_on: string | null
+          booking_link: string | null
           break_allowance_minutes: number
           commission_rate: number
           company_name: string
+          company_pitch: string
+          company_website: string | null
           daily_rate_basis: string
           default_daily_dials: number
           followup_gap_days: number
@@ -1456,6 +1496,7 @@ export type Database = {
           low_performance_salary_factor: number
           max_attempts: number
           payroll_cutoff_day: number
+          recycle_after_days: number
           reduced_half_days: number
           short_day_max_minutes: number
           signout_grace_minutes: number
@@ -1466,9 +1507,12 @@ export type Database = {
         Insert: {
           absent_alert_minutes?: number
           attendance_starts_on?: string | null
+          booking_link?: string | null
           break_allowance_minutes?: number
           commission_rate?: number
           company_name?: string
+          company_pitch?: string
+          company_website?: string | null
           daily_rate_basis?: string
           default_daily_dials?: number
           followup_gap_days?: number
@@ -1480,6 +1524,7 @@ export type Database = {
           low_performance_salary_factor?: number
           max_attempts?: number
           payroll_cutoff_day?: number
+          recycle_after_days?: number
           reduced_half_days?: number
           short_day_max_minutes?: number
           signout_grace_minutes?: number
@@ -1490,9 +1535,12 @@ export type Database = {
         Update: {
           absent_alert_minutes?: number
           attendance_starts_on?: string | null
+          booking_link?: string | null
           break_allowance_minutes?: number
           commission_rate?: number
           company_name?: string
+          company_pitch?: string
+          company_website?: string | null
           daily_rate_basis?: string
           default_daily_dials?: number
           followup_gap_days?: number
@@ -1504,6 +1552,7 @@ export type Database = {
           low_performance_salary_factor?: number
           max_attempts?: number
           payroll_cutoff_day?: number
+          recycle_after_days?: number
           reduced_half_days?: number
           short_day_max_minutes?: number
           signout_grace_minutes?: number
@@ -1834,6 +1883,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      is_tm_for_lead: {
+        Args: { p_lead: number }
+        Returns: boolean
+      }
       is_work_day: {
         Args: { p_date: string; p_profile: string }
         Returns: boolean
@@ -1841,6 +1894,10 @@ export type Database = {
       lead_filter_options: {
         Args: Record<PropertyKey, never>
         Returns: Json
+      }
+      lead_recycle_sweep: {
+        Args: Record<PropertyKey, never>
+        Returns: number
       }
       local_today: {
         Args: Record<PropertyKey, never>
@@ -1853,6 +1910,7 @@ export type Database = {
           p_deal_amount?: number
           p_followup_at?: string
           p_lead_id: number
+          p_meeting?: Json
           p_meeting_at?: string
           p_meeting_minutes?: number
           p_outcome?: string
@@ -1876,6 +1934,10 @@ export type Database = {
       mark_project_read: {
         Args: { p_project: number }
         Returns: undefined
+      }
+      meeting_when: {
+        Args: { p_at: string; p_tz: string }
+        Returns: string
       }
       my_attendance: {
         Args: Record<PropertyKey, never>
@@ -1905,6 +1967,7 @@ export type Database = {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          closed_at: string | null
           closed_reason: string | null
           connected: boolean
           country: string | null
@@ -1923,7 +1986,9 @@ export type Database = {
           phone_key: string | null
           platform: string | null
           post_link: string | null
+          previous_round: Json | null
           query: string | null
+          recycle_count: number
           service: string | null
           skipped_at: string | null
           stage: string
@@ -2016,6 +2081,10 @@ export type Database = {
       record_login: {
         Args: { p_kind: string; p_user_agent?: string }
         Returns: undefined
+      }
+      recycle_lead_ids: {
+        Args: { p_ids: number[] }
+        Returns: number
       }
       recycle_leads: {
         Args: { p_lead_ids: number[] }
@@ -2143,6 +2212,10 @@ export type Database = {
         Args: { p_name: string }
         Returns: number
       }
+      tz_label: {
+        Args: { p_tz: string }
+        Returns: string
+      }
       update_lead_contact: {
         Args: {
           p_lead_id: number
@@ -2155,6 +2228,7 @@ export type Database = {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          closed_at: string | null
           closed_reason: string | null
           connected: boolean
           country: string | null
@@ -2173,7 +2247,45 @@ export type Database = {
           phone_key: string | null
           platform: string | null
           post_link: string | null
+          previous_round: Json | null
           query: string | null
+          recycle_count: number
+          service: string | null
+          skipped_at: string | null
+          stage: string
+          status: string
+          updated_at: string
+          work_email: string | null
+        }
+      }
+      update_lead_details: {
+        Args: { p_fields: Json; p_lead_id: number }
+        Returns: {
+          assigned_at: string | null
+          assigned_to: string | null
+          attempts: number
+          closed_at: string | null
+          closed_reason: string | null
+          connected: boolean
+          country: string | null
+          created_at: string
+          deal_id: number | null
+          id: number
+          import_id: number | null
+          last_attempt_at: string | null
+          last_comment: string | null
+          lead_date: string | null
+          legacy: Json | null
+          name: string
+          next_action_at: string | null
+          personal_email: string | null
+          phone: string | null
+          phone_key: string | null
+          platform: string | null
+          post_link: string | null
+          previous_round: Json | null
+          query: string | null
+          recycle_count: number
           service: string | null
           skipped_at: string | null
           stage: string

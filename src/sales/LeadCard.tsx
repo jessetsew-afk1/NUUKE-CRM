@@ -2,13 +2,17 @@ import { useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
 import {
-  CalendarClock, Check, ChevronDown, Copy, ExternalLink, Globe, History as HistoryIcon, Mail, MessageSquare, Phone, PhoneCall, Repeat,
+  CalendarClock, Check, ChevronDown, Copy, ExternalLink, Globe, History as HistoryIcon, Mail, MessageSquare, Pencil, Phone, PhoneCall,
+  Recycle, Repeat,
 } from 'lucide-react';
 import type { Lead, LeadOutcome } from '@/lib/types';
 import { useLeadHistory, OUTCOME_TONE } from '@/data/sales';
-import { Pill, spring } from '@/ui/kit';
+import { usePeople } from '@/data/common';
+import { splitPhones, zoomCallHref as zoomHref } from '@/lib/phones';
+import { Button, Pill, spring } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { ago, day, dateTime, friendly } from '@/lib/format';
+import { EditLeadSheet } from './EditLeadSheet';
 
 /* ---------------------------------------------------------------- helpers */
 export async function copyText(text: string) {
@@ -26,12 +30,8 @@ export async function copyText(text: string) {
   }
 }
 
-/** Zoom Phone's click-to-call link. Works when the Zoom desktop app is installed. */
-export function zoomCallHref(phone: string) {
-  const digits = phone.replace(/[^\d+]/g, '');
-  const e164 = digits.startsWith('+') ? digits : digits.length === 10 ? `+1${digits}` : `+${digits}`;
-  return `zoomphonecall://${encodeURIComponent(e164)}`;
-}
+/** Zoom Phone's click-to-call link for one number. Works when the Zoom desktop app is installed. */
+export const zoomCallHref = zoomHref;
 
 /**
  * Bark-style queries arrive as "Title\nQuestion?\nAnswer\nQuestion?\nAnswer", with or without
@@ -66,7 +66,7 @@ export function attemptLabel(lead: Lead, maxAttempts: number) {
   return { text: `Follow-up ${lead.attempts + 1} of ${maxAttempts}`, tone: 'warn' as const };
 }
 
-function CopyButton({ value, label }: { value: string; label: string }) {
+export function CopyButton({ value, label, quiet, className }: { value: string; label: string; quiet?: boolean; className?: string }) {
   const [done, setDone] = useState(false);
   const toast = useToast();
   return (
@@ -78,12 +78,12 @@ function CopyButton({ value, label }: { value: string; label: string }) {
         e.stopPropagation();
         await copyText(value);
         setDone(true);
-        toast({ title: `${label} copied`, body: value, tone: 'success', duration: 1800 });
+        toast({ title: `${label} copied`, body: quiet ? 'Paste it into Zoom Phone or your email.' : value, tone: 'success', duration: 1800 });
         window.setTimeout(() => setDone(false), 1600);
       }}
       className={clsx(
-        'inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[13px] font-bold transition-colors',
-        done ? 'bg-ok text-white' : 'fill hover:bg-[var(--fill-2)]',
+        'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 text-[13px] font-bold transition-colors',
+        done ? 'bg-ok text-white' : 'fill hover:bg-[var(--fill-2)]', className,
       )}
       aria-label={`Copy ${label}`}
     >
@@ -108,14 +108,18 @@ function Row({ icon, children }: { icon: ReactNode; children: ReactNode }) {
 
 /* ------------------------------------------------------------------- card */
 export function LeadCard({
-  lead, outcomes, maxAttempts, showHistory = true, compact,
+  lead, outcomes, maxAttempts, showHistory = true, compact, onEdited,
 }: {
   lead: Lead;
   outcomes: Map<string, LeadOutcome>;
   maxAttempts: number;
   showHistory?: boolean;
   compact?: boolean;
+  /** Shows an Edit button; called with the saved lead. */
+  onEdited?: (lead: Lead) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const phones = splitPhones(lead.phone);
   const qa = parseQuery(lead.query);
   const label = attemptLabel(lead, maxAttempts);
   const status = outcomes.get(lead.status);
@@ -131,10 +135,17 @@ export function LeadCard({
         {status && lead.status !== 'new' && <Pill tone={OUTCOME_TONE[status.tone] ?? 'neutral'}>{status.short_label}</Pill>}
       </div>
 
+      {lead.recycle_count > 0 && <PreviousRound lead={lead} outcomes={outcomes} />}
+
       <div>
-        <h2 className={clsx('font-extrabold leading-tight tracking-tight', compact ? 'text-[26px]' : 'text-[32px] sm:text-[38px]')}>
-          {lead.name || 'Unnamed lead'}
-        </h2>
+        <div className="flex items-start gap-3">
+          <h2 className={clsx('min-w-0 flex-1 font-extrabold leading-tight tracking-tight', compact ? 'text-[26px]' : 'text-[32px] sm:text-[38px]')}>
+            {lead.name || 'Unnamed lead'}
+          </h2>
+          {onEdited && (
+            <Button size="sm" variant="glass" className="mt-1.5 shrink-0" icon={<Pencil className="size-3.5" />} onClick={() => setEditing(true)}>Edit</Button>
+          )}
+        </div>
         <div className="text-2 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-medium">
           {lead.country && <span className="inline-flex items-center gap-1.5"><Globe className="size-3.5" />{lead.country}</span>}
           <span className="inline-flex items-center gap-1.5"><CalendarClock className="size-3.5" />Enquired {day(lead.lead_date)}</span>
@@ -143,21 +154,24 @@ export function LeadCard({
       </div>
 
       <div className="space-y-3">
-        {lead.phone ? (
-          <Row icon={<Phone className="size-4" />}>
-            <span className="tabular font-mono text-[22px] font-semibold tracking-tight">{lead.phone}</span>
+        {phones.length ? phones.map((p, i) => (
+          <Row key={p + i} icon={<Phone className="size-4" />}>
+            <span className="flex min-w-0 flex-col">
+              {phones.length > 1 && <span className="text-3 text-[11px] font-bold uppercase tracking-wider">Number {i + 1} of {phones.length}</span>}
+              <span className={clsx('tabular font-mono font-semibold tracking-tight', phones.length > 1 ? 'text-[19px]' : 'text-[22px]')}>{p}</span>
+            </span>
             <span className="flex gap-2">
-              <CopyButton value={lead.phone} label="Number" />
+              <CopyButton value={p} label={phones.length > 1 ? `Number ${i + 1}` : 'Number'} />
               <a
-                href={zoomCallHref(lead.phone)}
+                href={zoomCallHref(p, lead.country)}
                 className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0B5CFF] px-3 text-[13px] font-bold text-white hover:brightness-110"
-                title="Opens Zoom Phone with this number"
+                title={`Opens Zoom Phone with ${p} only`}
               >
-                <PhoneCall className="size-4" /> Call in Zoom
+                <PhoneCall className="size-4" /> {phones.length > 1 ? `Call #${i + 1}` : 'Call in Zoom'}
               </a>
             </span>
           </Row>
-        ) : (
+        )) : (
           <Row icon={<Phone className="size-4" />}><span className="text-3">No phone number</span></Row>
         )}
         {lead.personal_email && (
@@ -208,7 +222,36 @@ export function LeadCard({
         </div>
       )}
 
-      {showHistory && lead.attempts > 0 && <History leadId={lead.id} outcomes={outcomes} />}
+      {showHistory && (lead.attempts > 0 || lead.recycle_count > 0) && <History leadId={lead.id} outcomes={outcomes} />}
+
+      {onEdited && <EditLeadSheet lead={editing ? lead : null} onClose={() => setEditing(false)} onSaved={(l) => { setEditing(false); onEdited(l); }} />}
+    </div>
+  );
+}
+
+interface PreviousRoundInfo { round?: number; closed_reason?: string | null; status?: string | null; attempts?: number; closed_at?: string | null; comment?: string | null; rep_id?: string | null }
+
+/** A recycled lead says how its last round ended, so the rep isn't calling blind. */
+function PreviousRound({ lead, outcomes }: { lead: Lead; outcomes: Map<string, LeadOutcome> }) {
+  const people = usePeople();
+  const prev = (lead.previous_round ?? {}) as PreviousRoundInfo;
+  const reason = prev.closed_reason === 'exhausted'
+    ? `No answer after ${prev.attempts ?? 'several'} call${prev.attempts === 1 ? '' : 's'}${prev.status && outcomes.get(prev.status) ? ` (last: ${outcomes.get(prev.status)!.label.toLowerCase()})` : ''}`
+    : outcomes.get(prev.closed_reason ?? '')?.label ?? outcomes.get(prev.status ?? '')?.label ?? 'Closed';
+  const rep = people.data?.find((p) => p.id === prev.rep_id)?.full_name;
+  return (
+    <div className="flex items-start gap-3 rounded-[20px] bg-warn/12 px-4 py-3 text-[13px]">
+      <Recycle className="mt-0.5 size-4 shrink-0 text-warn" />
+      <div className="min-w-0">
+        <div className="font-bold text-warn">Dialed before · now round {lead.recycle_count + 1}</div>
+        <div className="mt-0.5">
+          Last round: <b>{reason}</b>
+          {prev.closed_at && <> on {day(prev.closed_at)}</>}
+          {rep && <> by {rep}</>}
+          {prev.attempts ? <> · {prev.attempts} call{prev.attempts === 1 ? '' : 's'}</> : null}
+        </div>
+        {prev.comment && <div className="text-2 mt-0.5">Their note: “{prev.comment}”</div>}
+      </div>
     </div>
   );
 }

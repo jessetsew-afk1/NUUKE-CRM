@@ -46,8 +46,13 @@ const faisal = await as('faisal@nuuke.test');
   ok(profiles.length >= 9, 'Staff can see colleagues (names and agents)');
   const { data: audit } = await zoya.c.from('audit_log').select('id').limit(1);
   ok(audit.length === 0, 'A rep cannot read the audit log');
-  const { count: prodLeads } = await faisal.c.from('leads').select('*', { count: 'exact', head: true });
+  const umarC = await as('umar@nuuke.test');
+  const { count: prodLeads } = await umarC.c.from('leads').select('*', { count: 'exact', head: true });
   ok(prodLeads === 0, 'Production staff cannot see any leads');
+  const { data: tmLeads } = await faisal.c.from('leads').select('id');
+  const { data: tmMeetings } = await faisal.c.from('meetings').select('lead_id').eq('technical_manager_id', faisal.id);
+  const allowed = new Set(tmMeetings.map((m) => m.lead_id));
+  ok(tmLeads.every((l) => allowed.has(l.id)), 'A technical manager sees only the leads of meetings they are on', `${tmLeads.length} leads, ${tmMeetings.length} meetings`);
   const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
   const { count: allLeads } = await service.from('leads').select('*', { count: 'exact', head: true });
   const { count: adminLeads } = await admin.c.from('leads').select('*', { count: 'exact', head: true });
@@ -105,7 +110,7 @@ const faisal = await as('faisal@nuuke.test');
   const { data: skip } = await zoya.c.rpc('log_lead_action', { p_lead_id: first.id, p_action: 'skip' });
   const { data: after } = await zoya.c.rpc('next_leads', { p_limit: 50 });
   ok(after[0].id !== first.id, 'A skipped card goes to the back of the queue', `skips today ${skip.today.skips}`);
-  const card = after[0];
+  const card = after.find((l) => l.attempts < 3 && l.id !== first.id) ?? after[0]; // not on its final call
   const { data: done, error } = await zoya.c.rpc('log_lead_action', {
     p_lead_id: card.id, p_action: 'call', p_outcome: 'contact_not_established', p_comment: 'Rang out',
   });
@@ -224,6 +229,81 @@ const faisal = await as('faisal@nuuke.test');
   ok(!msgErr && pinged.has(umar.id) && pinged.has(admin.id) && !pinged.has(faisal.id), 'A client message alerts that team and the admins only');
   await service.from('project_messages').delete().eq('body', 'Rule check — please ignore');
   await service.from('notifications').delete().eq('kind', 'client_message').gte('created_at', new Date(Date.now() - 60_000).toISOString());
+}
+
+
+// ---- editing leads, technical managers, meetings, recycling
+{
+  const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+  const ayesha = await as('ayesha@nuuke.test');
+  const { data: mine } = await zoya.c.from('leads').select('id, phone, name').eq('assigned_to', zoya.id).eq('stage', 'queue').limit(1).single();
+  const { data: edited, error: ee } = await zoya.c.rpc('update_lead_details', { p_lead_id: mine.id, p_fields: { phone: '212-555-0101 / 312-555-0199', name: 'Edited Name' } });
+  ok(!ee && edited.phone === '212-555-0101 / 312-555-0199' && edited.name === 'Edited Name', 'A rep can edit their own lead (several numbers too)', ee?.message);
+  const { data: noteRow } = await service.from('lead_attempts').select('comment, action').eq('lead_id', mine.id).eq('action', 'note').order('id', { ascending: false }).limit(1).single();
+  ok(/Updated the name, phone/.test(noteRow?.comment ?? ''), 'The edit is written on the lead’s history', noteRow?.comment);
+  const { data: todayAfter } = await zoya.c.rpc('my_today');
+  ok(todayAfter !== null, 'Editing a lead is not counted as a dial');
+  await service.from('leads').update({ phone: mine.phone, name: mine.name }).eq('id', mine.id);
+  const { data: hl } = await admin.c.from('leads').select('id').eq('assigned_to', hamza.id).limit(1).single();
+  const { error: e2 } = await zoya.c.rpc('update_lead_details', { p_lead_id: hl.id, p_fields: { name: 'Sneaky' } });
+  ok(!!e2, "A rep cannot edit a colleague's lead", e2?.message);
+  const { error: e3 } = await zoya.c.rpc('update_lead_details', { p_lead_id: mine.id, p_fields: { assigned_to: zoya.id } });
+  ok(!!e3, 'Only lead details can be edited, not who owns it', e3?.message);
+  const { error: e4 } = await zoya.c.rpc('update_lead_details', { p_lead_id: mine.id, p_fields: { personal_email: 'not-an-email' } });
+  ok(!!e4, 'A broken email address is refused', e4?.message);
+
+  const { error: e5 } = await zoya.c.from('profiles').update({ is_technical_manager: true }).eq('id', zoya.id);
+  ok(!!e5, 'Nobody can make themselves a technical manager', e5?.message);
+
+  // Booking a meeting with a technical manager, in the client's time zone
+  const { data: lead2 } = await zoya.c.from('leads').select('id').eq('assigned_to', zoya.id).eq('stage', 'queue').neq('id', mine.id).limit(1).single();
+  const at = new Date(Date.now() + 3 * 86400000).toISOString();
+  const { error: e6 } = await zoya.c.rpc('log_lead_action', { p_lead_id: lead2.id, p_action: 'call', p_outcome: 'meeting_booked', p_meeting_at: at,
+    p_meeting: { timezone: 'America/Chicago', technical_manager_id: hamza.id } });
+  ok(!!e6, 'Only someone the admin made a technical manager can be put on a meeting', e6?.message);
+  const { data: booked, error: e7 } = await zoya.c.rpc('log_lead_action', { p_lead_id: lead2.id, p_action: 'call', p_outcome: 'meeting_booked', p_meeting_at: at,
+    p_meeting: { timezone: 'America/Chicago', technical_manager_id: ayesha.id, transcript: 'Rep: hi\nClient: hello', client_website: 'https://example.com', prep_notes: 'Budget 10k' } });
+  ok(!e7 && booked.meeting_id, 'A rep books a meeting with a time zone, technical manager and prep', e7?.message);
+  const { data: tmSees } = await ayesha.c.from('meetings').select('id, timezone, transcript, leads(name, phone)').eq('id', booked?.meeting_id).maybeSingle();
+  ok(tmSees?.timezone === 'America/Chicago' && tmSees?.transcript && tmSees?.leads, 'The technical manager sees the meeting, its prep and the lead');
+  const { data: told } = await service.from('notifications').select('title').eq('user_id', ayesha.id).eq('kind', 'meeting.tm_assigned').gte('created_at', new Date(Date.now() - 60000).toISOString());
+  ok(told.length > 0, 'The technical manager is notified', told[0]?.title);
+  const { data: faisalSees } = await faisal.c.from('meetings').select('id').eq('id', booked?.meeting_id);
+  ok(faisalSees.length === 0, "Other staff can't see a meeting they're not on");
+  const { data: hamzaSees } = await hamza.c.from('meetings').select('id').eq('id', booked?.meeting_id);
+  ok(hamzaSees.length === 0, "Another rep can't see a colleague's meeting");
+  const moved = new Date(Date.now() + 4 * 86400000).toISOString();
+  const { error: e8 } = await zoya.c.from('meetings').update({ starts_at: moved }).eq('id', booked.meeting_id);
+  const { data: movedNote } = await service.from('notifications').select('title').eq('user_id', ayesha.id).eq('kind', 'meeting.moved').gte('created_at', new Date(Date.now() - 60000).toISOString());
+  ok(!e8 && movedNote.length > 0, 'A rep can reschedule, and the technical manager is told', movedNote[0]?.title);
+  const { data: tmEdit } = await ayesha.c.from('meetings').update({ title: 'hijack' }).eq('id', booked.meeting_id).select();
+  ok(!tmEdit?.length, "A technical manager can't change the rep's meeting");
+  const { error: e9 } = await zoya.c.from('meetings').update({ timezone: 'Mars/Olympus' }).eq('id', booked.meeting_id);
+  ok(!!e9, 'An unknown time zone is refused', e9?.message);
+
+  // Recycling: everything except Do not call (and Won) comes back after the wait
+  const { data: three } = await admin.c.from('leads').select('id').eq('assigned_to', hamza.id).eq('stage', 'queue').limit(3);
+  const [dnc, ni, wonL] = three.map((x) => x.id);
+  const old = new Date(Date.now() - 3 * 86400000).toISOString();
+  await service.from('leads').update({ stage: 'closed', closed_reason: 'do_not_call', status: 'do_not_call' }).eq('id', dnc);
+  await service.from('leads').update({ stage: 'closed', closed_reason: 'not_interested', status: 'not_interested', last_comment: 'Said maybe next quarter' }).eq('id', ni);
+  await service.from('leads').update({ stage: 'closed', closed_reason: 'won', status: 'won' }).eq('id', wonL);
+  await service.from('leads').update({ closed_at: old }).in('id', [dnc, ni, wonL]);
+  const { error: e10 } = await service.rpc('lead_recycle_sweep');
+  const { data: after } = await service.from('leads').select('id, stage, recycle_count, previous_round').in('id', [dnc, ni, wonL]);
+  const by = new Map(after.map((x) => [x.id, x]));
+  ok(!e10 && by.get(ni).stage === 'queue' && by.get(ni).previous_round?.closed_reason === 'not_interested' && by.get(ni).previous_round?.comment === 'Said maybe next quarter',
+    'A “not interested” lead comes back after 2 days, remembering how the last round ended', e10?.message);
+  ok(by.get(dnc).stage === 'closed', 'A “do not call” lead never comes back');
+  ok(by.get(wonL).stage === 'closed', 'A won lead (a client) is not cold-called again');
+  const { data: fresh } = await admin.c.from('leads').select('id').eq('assigned_to', hamza.id).eq('stage', 'queue').neq('id', ni).limit(1).single();
+  await service.from('leads').update({ stage: 'closed', closed_reason: 'not_interested', status: 'not_interested' }).eq('id', fresh.id);
+  await service.rpc('lead_recycle_sweep');
+  const { data: tooSoon } = await service.from('leads').select('stage').eq('id', fresh.id).single();
+  ok(tooSoon.stage === 'closed', 'A lead closed today waits its 2 days');
+  const { data: adminBack } = await admin.c.rpc('recycle_leads', { p_lead_ids: [dnc, fresh.id] });
+  ok(adminBack === 1, 'The admin’s Recycle button brings back everything except Do not call', `${adminBack} of 2 recycled`);
+  await service.from('leads').update({ stage: 'queue', closed_reason: null, status: 'new' }).in('id', [dnc, wonL]);
 }
 
 // ---- clean up the clock-in so the demo starts fresh

@@ -78,6 +78,7 @@ export default function AdminPeople() {
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     <Pill tone={ROLE[p.role].tone}>{ROLE[p.role].label}</Pill>
                     {p.department && <Pill tone="neutral">{p.department}</Pill>}
+                    {p.is_technical_manager && <Pill tone="iris">Tech manager</Pill>}
                     {!p.is_active && <Pill tone="bad" solid>Off</Pill>}
                   </div>
                 </div>
@@ -103,7 +104,7 @@ export default function AdminPeople() {
 interface Form {
   full_name: string; email: string; role: Role; department: string; title: string; phone: string; password: string;
   salary: string; tracks: boolean; shift_start: string; shift_hours: string; work_days: number[]; dial_target: string;
-  target_usd: string; joined_on: string; active: boolean;
+  target_usd: string; joined_on: string; active: boolean; tm: boolean;
 }
 
 const genPassword = () => {
@@ -134,7 +135,7 @@ function PersonSheet({ person, onClose }: { person: Person | 'new' | null; onClo
       shift_start: (e?.shift_start ?? '18:00').slice(0, 5), shift_hours: String((e?.shift_minutes ?? 540) / 60),
       work_days: e?.work_days ?? [1, 2, 3, 4, 5], dial_target: String(e?.daily_dial_target ?? 250),
       target_usd: e?.monthly_target_usd ? String(e.monthly_target_usd) : '', joined_on: e?.joined_on ?? localISO(),
-      active: p?.is_active ?? true,
+      active: p?.is_active ?? true, tm: p?.is_technical_manager ?? false,
     } : null);
   }
   if (!form) return <Sheet open={false} onClose={onClose}>{null}</Sheet>;
@@ -156,10 +157,14 @@ function PersonSheet({ person, onClose }: { person: Person | 'new' | null; onClo
     setBusy(true);
     try {
       if (isNew) {
-        await adminUsers({
+        const created = await adminUsers<{ id?: string }>({
           action: 'create', email: form.email, password: form.password, full_name: form.full_name, role: form.role,
           department: form.department || null, title: form.title || null, phone: form.phone || null, employment: staff ? employment() : undefined,
         });
+        if (staff && form.tm && created.id) {
+          const { error } = await supabase.from('profiles').update({ is_technical_manager: true }).eq('id', created.id);
+          if (error) throw new Error(error.message);
+        }
         toast({ title: `${form.full_name} can sign in now`, body: `${form.email} · password ${form.password}`, tone: 'success', duration: 12000 });
       } else if (p) {
         const changes: Record<string, unknown> = {};
@@ -170,6 +175,11 @@ function PersonSheet({ person, onClose }: { person: Person | 'new' | null; onClo
         if (form.title !== (p.title ?? '')) changes.title = form.title || null;
         if (Object.keys(changes).length) await adminUsers({ action: 'update', user_id: p.id, ...changes });
         if (form.phone !== (p.phone ?? '')) await supabase.from('profiles').update({ phone: form.phone || null }).eq('id', p.id);
+        const tm = staff && form.tm;
+        if (tm !== p.is_technical_manager) {
+          const { error } = await supabase.from('profiles').update({ is_technical_manager: tm }).eq('id', p.id);
+          if (error) throw new Error(error.message);
+        }
         if (staff) {
           const { error } = await supabase.from('employment').upsert({ profile_id: p.id, ...employment() });
           if (error) throw new Error(error.message);
@@ -204,6 +214,15 @@ function PersonSheet({ person, onClose }: { person: Person | 'new' | null; onClo
             )}
             <Input label="Job title" value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="e.g. Sales Executive" />
             <Input label="Phone" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+            {staff && (
+              <div className="fill flex items-center justify-between gap-4 rounded-[18px] p-3.5 sm:col-span-2">
+                <div>
+                  <div className="text-[14px] font-bold">Technical manager</div>
+                  <div className="text-2 text-[13px]">Reps can put them on client meetings. They see those meetings, with the lead and the rep's prep, in “Client meetings”.</div>
+                </div>
+                <Switch checked={form.tm} onChange={(v) => set('tm', v)} />
+              </div>
+            )}
             <div className="sm:col-span-2">
               <Label hint={isNew ? 'share it with them — they can keep it' : 'leave blank to keep their current password'}>{isNew ? 'Password' : 'Reset password'}</Label>
               <div className="flex gap-2">

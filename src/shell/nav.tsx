@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   BarChart3, CalendarDays, ClipboardList, Columns3, Eye, FileSpreadsheet, FolderKanban, Gauge, Headphones, History, Kanban,
-  LayoutDashboard, ListTodo, Megaphone, MessagesSquare, Rocket, Settings, Shirt, Trophy, Users, Wallet, Clock, Inbox, Sparkles,
+  LayoutDashboard, ListTodo, Megaphone, MessagesSquare, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles,
 } from 'lucide-react';
 import type { Role } from '@/lib/types';
 
@@ -10,12 +10,21 @@ export interface NavItem {
   /** A count on the item; `urgent` makes it the pulsing red dot. */
   badge?: number; urgent?: boolean;
 }
-export interface NavContext { projectId?: number | null; reviews?: number; unread?: number }
+export interface NavContext { projectId?: number | null; reviews?: number; unread?: number; techManager?: boolean }
 export interface NavGroup { label: string; items: NavItem[] }
 
 const i = (C: typeof Gauge) => <C className="size-[18px]" strokeWidth={2.1} />;
 
 export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
+  const groups = baseNav(role, ctx);
+  // Technical managers (any staff role) get their client meetings.
+  if (ctx.techManager && role !== 'client') {
+    groups[0].items.push({ to: '/meetings/tech', label: 'Client meetings', short: 'Meetings', icon: i(Video) });
+  }
+  return groups;
+}
+
+function baseNav(role: Role, ctx: NavContext): NavGroup[] {
   const me: NavGroup = {
     label: 'You',
     items: [
@@ -47,6 +56,7 @@ export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
           items: [
             { to: '/admin', label: 'Overview', icon: i(LayoutDashboard), end: true, mobile: true },
             { to: '/admin/sales', label: 'Sales floor', short: 'Sales', icon: i(Gauge), mobile: true },
+            { to: '/admin/meetings', label: 'Meetings calendar', short: 'Meetings', icon: i(CalendarDays) },
             { to: '/projects', label: 'Projects', icon: i(FolderKanban), mobile: true, badge: ctx.unread },
             { to: '/admin/leads', label: 'Leads & import', short: 'Leads', icon: i(FileSpreadsheet) },
             { to: '/leaderboard', label: 'Leaderboard', icon: i(Trophy) },

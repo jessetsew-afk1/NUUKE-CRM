@@ -223,7 +223,7 @@ export default function AdminLeads() {
       <AssignSheet open={assigning} onClose={() => setAssigning(false)} reps={reps} count={selCount} onAssign={assign} />
       <ImportWizard open={importing} onClose={() => setImporting(false)} reps={reps} />
       <Sheet open={!!open} onClose={() => setOpen(null)} width={760} title={open?.name || 'Lead'}>
-        {open && <LeadCard lead={open} outcomes={omap} maxAttempts={4} compact />}
+        {open && <LeadCard lead={open} outcomes={omap} maxAttempts={4} compact onEdited={(l) => { setOpen(l); void qc.invalidateQueries({ queryKey: ['admin-leads'] }); }} />}
       </Sheet>
     </>
   );

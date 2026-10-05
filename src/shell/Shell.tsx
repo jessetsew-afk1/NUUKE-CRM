@@ -34,7 +34,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const projectId = defaultProject(projects.data, pending.data, current)?.id ?? null;
   const reviews = (pending.data ?? []).filter((f) => f.project_id === projectId).length;
   const unreadCount = (unread.data ?? []).reduce((s, u) => s + (role !== 'client' || u.project_id === projectId ? Number(u.unread) : 0), 0);
-  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount }), [role, projectId, reviews, unreadCount]);
+  const techManager = !!profile?.is_technical_manager;
+  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager }), [role, projectId, reviews, unreadCount, techManager]);
 
   return (
     <div className="relative z-10 min-h-dvh">

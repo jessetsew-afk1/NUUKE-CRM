@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { must, rpc, supabase } from '@/lib/supabase';
 import type {
-  Deal, DealStage, Lead, LeadAttempt, LeadOutcome, LeaderRow, Meeting, QueueSummary, SalesStats, TodayStats,
+  Deal, DealStage, Lead, LeadAttempt, LeadOutcome, LeaderRow, Meeting, Profile, QueueSummary, SalesStats, TodayStats,
 } from '@/lib/types';
 import { useAuth } from '@/app/auth';
 import type { Tone } from '@/ui/kit';
@@ -80,6 +80,18 @@ export interface LogArgs {
   meetingAt?: string | null;
   meetingMinutes?: number;
   dealAmount?: number | null;
+  meeting?: MeetingExtras | null;
+}
+
+/** What a rep collects when booking a meeting, beyond the time. */
+export interface MeetingExtras {
+  timezone: string | null;
+  technical_manager_id: string | null;
+  location: string | null;
+  transcript: string | null;
+  client_website: string | null;
+  client_links: string | null;
+  prep_notes: string | null;
 }
 
 export function logLeadAction(a: LogArgs) {
@@ -92,6 +104,7 @@ export function logLeadAction(a: LogArgs) {
     p_meeting_at: a.meetingAt ?? undefined,
     p_meeting_minutes: a.meetingMinutes ?? undefined,
     p_deal_amount: a.dealAmount ?? undefined,
+    p_meeting: (a.meeting ?? undefined) as never,
   });
 }
 
@@ -202,6 +215,42 @@ export function useMeetings() {
     queryKey: ['meetings', profile?.id],
     queryFn: async () =>
       must(await supabase.from('meetings').select('*').eq('owner_id', profile!.id).order('starts_at', { ascending: true })) as Meeting[],
+  });
+}
+
+/** The people the admin has made technical managers (to put on a meeting). */
+export function useTechManagers() {
+  return useQuery({
+    queryKey: ['tech-managers'],
+    staleTime: 60_000,
+    queryFn: async () => must(await supabase.from('profiles').select('id, full_name, avatar, title, department, role')
+      .eq('is_technical_manager', true).eq('is_active', true).order('full_name')) as Pick<Profile, 'id' | 'full_name' | 'avatar' | 'title' | 'department' | 'role'>[],
+  });
+}
+
+export type MeetingLead = Pick<Lead, 'id' | 'name' | 'phone' | 'personal_email' | 'work_email' | 'country' | 'service' | 'platform' | 'query' | 'post_link'>;
+export type MeetingWithLead = Meeting & { leads: MeetingLead | null };
+
+/**
+ * Meetings with their lead, for calendars. `scope`: 'all' (admin), 'tm' (the ones I'm
+ * the technical manager on) or 'mine' (the ones I booked).
+ */
+export function useMeetingsWithLeads(scope: 'all' | 'tm' | 'mine', enabled = true) {
+  const { profile } = useAuth();
+  return useQuery({
+    queryKey: ['meetings', 'calendar', scope, profile?.id],
+    enabled: enabled && !!profile,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      let q = supabase.from('meetings')
+        .select('*, leads(id, name, phone, personal_email, work_email, country, service, platform, query, post_link)')
+        .gte('starts_at', new Date(Date.now() - 120 * 864e5).toISOString())
+        .order('starts_at', { ascending: true })
+        .limit(3000);
+      if (scope === 'tm') q = q.eq('technical_manager_id', profile!.id);
+      if (scope === 'mine') q = q.eq('owner_id', profile!.id);
+      return must(await q) as unknown as MeetingWithLead[];
+    },
   });
 }
 
