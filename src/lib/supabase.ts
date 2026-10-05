@@ -38,6 +38,15 @@ export const supabase = createClient<Database>(url ?? 'http://localhost:54321', 
 
 type Fn = Database['public']['Functions'];
 
+let channelSeq = 0;
+/**
+ * A live-updates channel with a name of its own. Supabase hands back the *same* channel
+ * when two parts of the screen ask for the same name, and adding a listener to a channel
+ * that's already connected throws, which takes the page down. A unique name per
+ * listener (the menu badge and the page can both watch the same table) avoids that.
+ */
+export const liveChannel = (name: string) => supabase.channel(`${name}:live${++channelSeq}`);
+
 /**
  * Calls a database function and throws its message (which the SQL writes for people,
  * e.g. "Pick when to call them back") instead of returning { error }.
