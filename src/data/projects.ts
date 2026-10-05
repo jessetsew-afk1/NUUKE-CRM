@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { must, rpc, supabase } from '@/lib/supabase';
+import { liveChannel, must, rpc, supabase } from '@/lib/supabase';
 import type {
   ContentPost, FileComment, Profile, Project, ProjectActivity, ProjectEvent, ProjectFile, ProjectMessage, Sprint, Task,
   TaskComment, TaskPriority, TaskStatus,
@@ -316,8 +316,7 @@ export function useMessages(projectId: number | undefined) {
   const qc = useQueryClient();
   useEffect(() => {
     if (!projectId) return;
-    const channel = supabase
-      .channel(`project-messages:${projectId}`)
+    const channel = liveChannel(`project-messages:${projectId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'project_messages', filter: `project_id=eq.${projectId}` },
         () => qc.invalidateQueries({ queryKey: ['p', projectId, 'messages'] }))
       .subscribe();

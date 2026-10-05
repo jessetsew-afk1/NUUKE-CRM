@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { must, rpc, supabase } from '@/lib/supabase';
+import { liveChannel, must, rpc, supabase } from '@/lib/supabase';
 import type { Notification } from '@/lib/types';
 import { useToast } from '@/ui/toast';
 import { celebrate } from '@/lib/celebrate';
@@ -48,8 +48,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   // Live updates where the project has Realtime switched on; polling covers the rest.
   useEffect(() => {
     if (!uid) return;
-    const channel = supabase
-      .channel(`notifications:${uid}`)
+    const channel = liveChannel(`notifications:${uid}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
         () => qc.invalidateQueries({ queryKey: ['notifications', uid] }))
       .subscribe();

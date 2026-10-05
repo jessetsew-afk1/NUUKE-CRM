@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/app/auth';
 import { useAttendance } from '@/app/attendance';
-import { must, rpc, supabase } from '@/lib/supabase';
+import { liveChannel, must, rpc, supabase } from '@/lib/supabase';
 import type { Game, GamePlayer } from '@/lib/types';
 
 export type GameKind = 'tictactoe' | 'checkers' | 'chess' | 'ludo';
@@ -45,8 +45,7 @@ export function useMyGames(enabled = true) {
   });
   useEffect(() => {
     if (!enabled || !uid) return;
-    const channel = supabase
-      .channel(`games:${uid}`)
+    const channel = liveChannel(`games:${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games' }, () => qc.invalidateQueries({ queryKey: ['games', uid] }))
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
@@ -65,8 +64,7 @@ export function useGame(id: number | null) {
   });
   useEffect(() => {
     if (!id) return;
-    const channel = supabase
-      .channel(`game:${id}`)
+    const channel = liveChannel(`game:${id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${id}` }, () => qc.invalidateQueries({ queryKey: ['game', id] }))
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
