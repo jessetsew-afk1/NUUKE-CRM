@@ -1,25 +1,29 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
-import { Ban, ChevronDown, Mail, MessageSquareText, MousePointerClick, PhoneCall, Send, Sparkles, Star } from 'lucide-react';
+import { Ban, ChevronDown, Mail, MessageSquareText, MousePointerClick, PhoneCall, ScanSearch, Send, Sparkles, Star, Zap } from 'lucide-react';
 import { useAuth } from '@/app/auth';
 import { useSettings } from '@/data/common';
 import type { Lead } from '@/lib/types';
-import { Pill, Segmented } from '@/ui/kit';
+import { Pill } from '@/ui/kit';
 import { buildOutreach, type EmailMsg, type TextMsg } from './outreach';
 import { CopyButton } from './LeadCard';
+import { QuickMessages } from './QuickMessages';
 
-type Tab = 'texts' | 'emails' | 'call';
+type Tab = 'texts' | 'emails' | 'call' | 'quick';
 const OPEN_KEY = 'nuuke-outreach-open';
+const TAB_KEY = 'nuuke-outreach-tab';
 
 /**
- * Message ideas for the lead on screen, written from their query (or their service).
+ * Message ideas for the lead on screen, written from the details in their query (or
+ * their service when there's no query), plus the rep's own saved quick messages.
  * Everything is editable before copying; edits reset when the next card comes up.
  */
 export function OutreachPanel({ lead }: { lead: Lead }) {
   const { profile } = useAuth();
   const settings = useSettings();
-  const [tab, setTab] = useState<Tab>('texts');
+  const [tab, setTabState] = useState<Tab>(() => { try { return (localStorage.getItem(TAB_KEY) as Tab) || 'texts'; } catch { return 'texts'; } });
+  const setTab = (t: Tab) => { setTabState(t); try { localStorage.setItem(TAB_KEY, t); } catch { /* ignore */ } };
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0'; } catch { return true; } });
   useEffect(() => { try { localStorage.setItem(OPEN_KEY, open ? '1' : '0'); } catch { /* ignore */ } }, [open]);
 
@@ -39,7 +43,7 @@ export function OutreachPanel({ lead }: { lead: Lead }) {
   if (lead.status === 'do_not_call' || lead.closed_reason === 'do_not_call') {
     return (
       <section className="flex items-center gap-3 rounded-[24px] bg-bad/10 px-5 py-4 text-[13.5px] font-semibold text-bad">
-        <Ban className="size-4 shrink-0" /> Do not call — no texts or emails for this lead.
+        <Ban className="size-4 shrink-0" /> Do not call. No texts or emails for this lead.
       </section>
     );
   }
@@ -51,11 +55,11 @@ export function OutreachPanel({ lead }: { lead: Lead }) {
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-extrabold">Message ideas</span>
           <span className="text-2 block truncate text-[12.5px]">
-            {o.basedOn === 'query' ? 'Written from their query' : o.basedOn === 'service' ? 'Written from the service they picked' : 'No query or service on this lead — a general version'}
-            {' · '}<i>“{o.about}”</i>
+            {o.basedOn === 'query' ? 'Written from what they wrote' : o.basedOn === 'service' ? 'No query, so written from the service they picked' : 'No query or service on this lead, so a general version'}
+            {' · '}<i>{o.about}</i>
           </span>
         </span>
-        <Pill tone="iris" className="hidden sm:inline-flex">{o.topicLabel}</Pill>
+        <span className="hidden shrink-0 sm:block"><Pill tone="iris">{o.topicLabel}</Pill></span>
         <ChevronDown className={clsx('size-5 shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
 
@@ -64,10 +68,24 @@ export function OutreachPanel({ lead }: { lead: Lead }) {
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }} className="overflow-hidden">
             <div className="px-5 pb-5">
-              <Segmented value={tab} onChange={setTab} className="mb-4" options={[
-                { value: 'texts', label: <span className="flex items-center gap-1.5"><MessageSquareText className="size-4" />Texts <span className="text-3">{o.texts.length}</span></span> },
-                { value: 'emails', label: <span className="flex items-center gap-1.5"><Mail className="size-4" />Emails <span className="text-3">{o.emails.length}</span></span> },
-                { value: 'call', label: <span className="flex items-center gap-1.5"><PhoneCall className="size-4" />Call opener</span> },
+              {o.facts.length > 0 && tab !== 'quick' && (
+                <div className="mb-4 rounded-[20px] bg-iris/8 p-3.5 ring-1 ring-iris/20">
+                  <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-iris"><ScanSearch className="size-3.5" />What they told us</div>
+                  <dl className="flex flex-wrap gap-1.5">
+                    {o.facts.map((f) => (
+                      <div key={`${f.label}-${f.value}`} className="inline-flex max-w-full items-baseline gap-1.5 rounded-full bg-[var(--glass-strong)] px-2.5 py-1 text-[12.5px] ring-1 ring-[var(--hairline)]">
+                        <dt className="text-3 shrink-0 font-bold">{f.label}</dt>
+                        <dd className="truncate font-semibold" title={f.value}>{f.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
+              <Tabs value={tab} onChange={setTab} options={[
+                { value: 'texts', icon: <MessageSquareText className="size-4" />, label: 'Texts', count: o.texts.length },
+                { value: 'emails', icon: <Mail className="size-4" />, label: 'Emails', count: o.emails.length },
+                { value: 'call', icon: <PhoneCall className="size-4" />, label: 'Call opener', short: 'Call' },
+                { value: 'quick', icon: <Zap className="size-4" />, label: 'My quick messages', short: 'My quick' },
               ]} />
 
               {tab === 'texts' && (
@@ -78,7 +96,7 @@ export function OutreachPanel({ lead }: { lead: Lead }) {
               )}
               {tab === 'emails' && (
                 <div className="space-y-3">
-                  {!email && <p className="rounded-2xl bg-warn/12 px-3.5 py-2.5 text-[13px] font-semibold text-warn">This lead has no email address — add one with Edit, or copy the text to use elsewhere.</p>}
+                  {!email && <p className="rounded-2xl bg-warn/12 px-3.5 py-2.5 text-[13px] font-semibold text-warn">This lead has no email address. Add one with Edit, or copy the text to use elsewhere.</p>}
                   {o.emails.map((m) => <EmailCard key={`${lead.id}-${m.id}`} msg={m} to={email} />)}
                 </div>
               )}
@@ -96,11 +114,37 @@ export function OutreachPanel({ lead }: { lead: Lead }) {
                   <ScriptBlock title="“We already hired someone”" text={o.call.alreadyHired} />
                 </div>
               )}
+              {tab === 'quick' && <QuickMessages lead={lead} company={settings.data?.company_name ?? 'NUUKE'} />}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
     </section>
+  );
+}
+
+/** Four tabs that always fit: icon over a short label on a phone, side by side on wider screens. */
+function Tabs({ value, onChange, options }: {
+  value: Tab;
+  onChange: (t: Tab) => void;
+  options: { value: Tab; icon: ReactNode; label: string; short?: string; count?: number }[];
+}) {
+  return (
+    <div className="fill mb-4 grid grid-cols-4 gap-1 rounded-[14px] p-1" role="tablist">
+      {options.map((o) => (
+        <button key={o.value} type="button" role="tab" aria-selected={o.value === value} aria-label={o.label} onClick={() => onChange(o.value)}
+          className={clsx('relative min-w-0 rounded-[11px] px-1.5 py-1.5 font-semibold transition-colors', o.value === value ? 'text-[color:var(--text)]' : 'text-2 hover:text-[color:var(--text)]')}>
+          {o.value === value && <motion.span layoutId="outreach-tab" transition={{ type: 'spring', stiffness: 420, damping: 34 }} className="absolute inset-0 rounded-[11px] bg-[var(--glass-strong)] shadow-[0_2px_8px_rgba(0,0,0,0.08)]" />}
+          <span className="relative flex min-w-0 flex-col items-center justify-center gap-0.5 sm:flex-row sm:gap-1.5">
+            {o.icon}
+            <span className="max-w-full truncate text-[11px] sm:text-[13px]">
+              <span className="sm:hidden">{o.short ?? o.label}</span><span className="hidden sm:inline">{o.label}</span>
+              {o.count !== undefined && <span className="text-3 ml-1">{o.count}</span>}
+            </span>
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 

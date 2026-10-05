@@ -580,6 +580,121 @@ export type Database = {
           },
         ]
       }
+      game_players: {
+        Row: {
+          game_id: number
+          invited_at: string
+          responded_at: string | null
+          seat: number
+          status: string
+          user_id: string
+        }
+        Insert: {
+          game_id: number
+          invited_at?: string
+          responded_at?: string | null
+          seat: number
+          status?: string
+          user_id: string
+        }
+        Update: {
+          game_id?: number
+          invited_at?: string
+          responded_at?: string | null
+          seat?: number
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_players_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_players_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      games: {
+        Row: {
+          created_at: string
+          finished_at: string | null
+          host_id: string
+          id: number
+          kind: string
+          last_roll: number | null
+          result: string | null
+          started_at: string | null
+          state: Json
+          status: string
+          turn_user: string | null
+          updated_at: string
+          version: number
+          winner_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          finished_at?: string | null
+          host_id: string
+          id?: never
+          kind: string
+          last_roll?: number | null
+          result?: string | null
+          started_at?: string | null
+          state?: Json
+          status?: string
+          turn_user?: string | null
+          updated_at?: string
+          version?: number
+          winner_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          finished_at?: string | null
+          host_id?: string
+          id?: never
+          kind?: string
+          last_roll?: number | null
+          result?: string | null
+          started_at?: string | null
+          state?: Json
+          status?: string
+          turn_user?: string | null
+          updated_at?: string
+          version?: number
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "games_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_turn_user_fkey"
+            columns: ["turn_user"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holidays: {
         Row: {
           day: string
@@ -1475,6 +1590,47 @@ export type Database = {
           },
         ]
       }
+      quick_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: number
+          position: number
+          title: string
+          updated_at: string
+          user_id: string
+          uses: number
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: never
+          position?: number
+          title?: string
+          updated_at?: string
+          user_id?: string
+          uses?: number
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: never
+          position?: number
+          title?: string
+          updated_at?: string
+          user_id?: string
+          uses?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           absent_alert_minutes: number
@@ -1811,6 +1967,10 @@ export type Database = {
         Args: { p_email: string; p_full_name: string }
         Returns: string
       }
+      can_play: {
+        Args: { p_user?: string }
+        Returns: boolean
+      }
       can_read_project_object: {
         Args: { p_name: string }
         Returns: boolean
@@ -1867,9 +2027,131 @@ export type Database = {
         Args: { p_import_id: number }
         Returns: Json
       }
+      first_name: {
+        Args: { p_user: string }
+        Returns: string
+      }
+      game_create: {
+        Args: { p_invitees: string[]; p_kind: string; p_state?: Json }
+        Returns: number
+      }
+      game_label: {
+        Args: { p_kind: string }
+        Returns: string
+      }
+      game_leave: {
+        Args: { p_game_id: number }
+        Returns: {
+          created_at: string
+          finished_at: string | null
+          host_id: string
+          id: number
+          kind: string
+          last_roll: number | null
+          result: string | null
+          started_at: string | null
+          state: Json
+          status: string
+          turn_user: string | null
+          updated_at: string
+          version: number
+          winner_id: string | null
+        }
+      }
+      game_move: {
+        Args: {
+          p_game_id: number
+          p_next_user: string
+          p_result?: string
+          p_state: Json
+          p_version: number
+          p_winner?: string
+        }
+        Returns: {
+          created_at: string
+          finished_at: string | null
+          host_id: string
+          id: number
+          kind: string
+          last_roll: number | null
+          result: string | null
+          started_at: string | null
+          state: Json
+          status: string
+          turn_user: string | null
+          updated_at: string
+          version: number
+          winner_id: string | null
+        }
+      }
+      game_respond: {
+        Args: { p_accept: boolean; p_game_id: number }
+        Returns: {
+          created_at: string
+          finished_at: string | null
+          host_id: string
+          id: number
+          kind: string
+          last_roll: number | null
+          result: string | null
+          started_at: string | null
+          state: Json
+          status: string
+          turn_user: string | null
+          updated_at: string
+          version: number
+          winner_id: string | null
+        }
+      }
+      game_roll: {
+        Args: { p_game_id: number }
+        Returns: {
+          created_at: string
+          finished_at: string | null
+          host_id: string
+          id: number
+          kind: string
+          last_roll: number | null
+          result: string | null
+          started_at: string | null
+          state: Json
+          status: string
+          turn_user: string | null
+          updated_at: string
+          version: number
+          winner_id: string | null
+        }
+      }
+      game_start: {
+        Args: { p_game_id: number; p_state: Json }
+        Returns: {
+          created_at: string
+          finished_at: string | null
+          host_id: string
+          id: number
+          kind: string
+          last_roll: number | null
+          result: string | null
+          started_at: string | null
+          state: Json
+          status: string
+          turn_user: string | null
+          updated_at: string
+          version: number
+          winner_id: string | null
+        }
+      }
+      game_sweep: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       import_leads: {
         Args: { p_import_id: number; p_rows: Json; p_skip_duplicates?: boolean }
         Returns: Json
+      }
+      in_game: {
+        Args: { p_game: number }
+        Returns: boolean
       }
       is_admin: {
         Args: Record<PropertyKey, never>
@@ -2049,6 +2331,10 @@ export type Database = {
         Args: { p_date: string }
         Returns: string
       }
+      players_on_break: {
+        Args: Record<PropertyKey, never>
+        Returns: string[]
+      }
       project_access: {
         Args: { p_project: number }
         Returns: string
@@ -2077,6 +2363,10 @@ export type Database = {
           p_to?: string
         }
         Returns: Json
+      }
+      quick_message_used: {
+        Args: { p_id: number }
+        Returns: undefined
       }
       record_login: {
         Args: { p_kind: string; p_user_agent?: string }

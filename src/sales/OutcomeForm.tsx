@@ -43,7 +43,7 @@ const presetsCallback = () => {
 };
 
 export function OutcomeForm({
-  lead, outcomes, maxAttempts, busy, onSubmit, onSkip, submitLabel = 'Done — next card', autoFocusKeys = true,
+  lead, outcomes, maxAttempts, busy, onSubmit, onSkip, submitLabel = 'Done, next card', autoFocusKeys = true,
 }: {
   lead: Lead;
   outcomes: LeadOutcome[];
@@ -149,7 +149,7 @@ export function OutcomeForm({
           value={outcome}
           onChange={(v) => { setOutcome(v); window.setTimeout(() => commentRef.current?.focus(), 50); }}
           options={options}
-          placeholder="Status — choose from the full list"
+          placeholder="Status: pick from the full list"
         />
       </div>
 

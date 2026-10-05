@@ -306,6 +306,88 @@ const faisal = await as('faisal@nuuke.test');
   await service.from('leads').update({ stage: 'queue', closed_reason: null, status: 'new' }).in('id', [dnc, wonL]);
 }
 
+// ---- quick messages: each rep's own
+{
+  const { data: mine, error } = await zoya.c.from('quick_messages').insert({ title: 'Test', body: 'Hi {first name}, quick test' }).select().single();
+  ok(!error && mine?.user_id === zoya.id, 'A rep can save a quick message, and it is theirs', error?.message);
+  const { data: peek } = await hamza.c.from('quick_messages').select('id').eq('id', mine.id);
+  ok(peek.length === 0, "A rep can't see a colleague's quick messages");
+  const { data: hijack } = await hamza.c.from('quick_messages').update({ body: 'hijacked' }).eq('id', mine.id).select();
+  ok(!hijack?.length, "A rep can't change a colleague's quick messages");
+  const { error: e2 } = await zoya.c.from('quick_messages').insert({ user_id: hamza.id, body: 'planted' });
+  ok(!!e2, "A rep can't plant a quick message on someone else", e2?.message);
+  await zoya.c.rpc('quick_message_used', { p_id: mine.id });
+  const { data: used } = await zoya.c.from('quick_messages').select('uses').eq('id', mine.id).single();
+  ok(used.uses === 1, 'Copying a quick message counts it');
+  await zoya.c.from('quick_messages').delete().eq('id', mine.id);
+}
+
+// ---- mini games: break time only
+{
+  const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+  const ttt = { board: Array(9).fill(null) };
+  await zoya.c.rpc('end_break');
+  const { error: e1 } = await zoya.c.rpc('game_create', { p_kind: 'tictactoe', p_invitees: [hamza.id], p_state: ttt });
+  ok(!!e1 && /break/i.test(e1.message), 'Games are locked outside a break', e1?.message);
+
+  await zoya.c.rpc('start_break');
+  const { data: client } = await service.from('profiles').select('id').eq('role', 'client').limit(1).single();
+  const { error: e2 } = await zoya.c.rpc('game_create', { p_kind: 'chess', p_invitees: [client.id], p_state: {} });
+  ok(!!e2, "Clients can't be invited to games", e2?.message);
+  const { data: gid, error: e3 } = await zoya.c.rpc('game_create', { p_kind: 'tictactoe', p_invitees: [hamza.id], p_state: ttt });
+  ok(!e3 && gid > 0, 'On a break, a rep can invite a teammate', e3?.message);
+  const { data: inviteNote } = await service.from('notifications').select('title').eq('user_id', hamza.id).eq('kind', 'game.invite').order('id', { ascending: false }).limit(1);
+  ok(inviteNote?.[0]?.title?.includes('Tic-Tac-Toe'), 'The invite arrives as a notification', inviteNote?.[0]?.title);
+  const { data: outsider } = await faisal.c.from('games').select('id').eq('id', gid);
+  ok(outsider.length === 0, "People outside a game can't see it");
+
+  await hamza.c.rpc('clock_in');
+  await hamza.c.rpc('end_break');
+  const { error: e4 } = await hamza.c.rpc('game_respond', { p_game_id: gid, p_accept: true });
+  ok(!!e4 && /break/i.test(e4.message), "An invite can't be accepted outside a break", e4?.message);
+  await hamza.c.rpc('start_break');
+  const { data: started, error: e5 } = await hamza.c.rpc('game_respond', { p_game_id: gid, p_accept: true });
+  ok(!e5 && started.status === 'active' && started.turn_user === zoya.id, 'Accepting on a break starts the game; the host goes first', e5?.message);
+
+  const move = (who, version, idx, seat, next) => who.c.rpc('game_move', {
+    p_game_id: gid, p_version: version, p_state: { board: ttt.board.map((v, i) => (i === idx ? seat : v)) }, p_next_user: next,
+  });
+  const { error: e6 } = await move(hamza, started.version, 4, 1, zoya.id);
+  ok(!!e6 && /turn/i.test(e6.message), "You can't move when it's not your turn", e6?.message);
+  const { error: e7 } = await move(zoya, started.version - 1, 4, 0, hamza.id);
+  ok(!!e7 && /changed/i.test(e7.message), 'A move against an old board is refused', e7?.message);
+  const { error: e8 } = await move(zoya, started.version, 4, 0, faisal.id);
+  ok(!!e8, 'The turn can only pass to a player in the game', e8?.message);
+  const { data: moved, error: e9 } = await move(zoya, started.version, 4, 0, hamza.id);
+  ok(!e9 && moved.turn_user === hamza.id && moved.version === started.version + 1, 'A move on your turn goes through and passes the turn', e9?.message);
+  const { data: direct } = await zoya.c.from('games').update({ status: 'finished', winner_id: zoya.id }).eq('id', gid).select();
+  ok(!direct?.length, "Nobody can just declare themselves the winner");
+
+  await hamza.c.rpc('end_break');
+  const { error: e10 } = await hamza.c.rpc('game_move', { p_game_id: gid, p_version: moved.version, p_state: { board: ttt.board }, p_next_user: zoya.id });
+  ok(!!e10 && /break/i.test(e10.message), 'Moves only count on a break; the game waits', e10?.message);
+  const { data: resigned, error: e11 } = await hamza.c.rpc('game_leave', { p_game_id: gid });
+  ok(!e11 && resigned.status === 'finished' && resigned.winner_id === zoya.id, 'Resigning (allowed any time) hands the win to the other player', e11?.message);
+
+  // Ludo: up to four, the host starts, the database rolls the dice
+  const { data: lid } = await zoya.c.rpc('game_create', { p_kind: 'ludo', p_invitees: [hamza.id, admin.id], p_state: {} });
+  const { error: e12 } = await admin.c.rpc('game_respond', { p_game_id: lid, p_accept: true });
+  ok(!e12, 'Admins can join a game any time (they are not on the clock)', e12?.message);
+  const { data: waitingStill } = await zoya.c.from('games').select('status').eq('id', lid).single();
+  ok(waitingStill.status === 'waiting', 'Ludo waits for the host to start');
+  const { data: lStart, error: e13 } = await zoya.c.rpc('game_start', { p_game_id: lid, p_state: { seats: [0, 2] } });
+  ok(!e13 && lStart.status === 'active', 'The host starts Ludo with whoever joined', e13?.message);
+  const { data: r1, error: e14 } = await zoya.c.rpc('game_roll', { p_game_id: lid });
+  const { data: r2 } = await zoya.c.rpc('game_roll', { p_game_id: lid });
+  ok(!e14 && r1.last_roll >= 1 && r1.last_roll <= 6 && r2.last_roll === r1.last_roll, 'The dice are rolled once per turn by the database', `rolled ${r1?.last_roll}`);
+  const { data: hamzaSeat } = await zoya.c.from('game_players').select('status').eq('game_id', lid).eq('user_id', hamza.id).single();
+  ok(hamzaSeat.status === 'declined', 'Anyone who had not joined is dropped when Ludo starts');
+  await zoya.c.rpc('game_leave', { p_game_id: lid });
+
+  await zoya.c.rpc('end_break');
+  await hamza.c.rpc('clock_out');
+}
+
 // ---- clean up the clock-in so the demo starts fresh
 await zoya.c.rpc('clock_out');
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');
