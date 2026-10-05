@@ -577,6 +577,57 @@ async function main() {
   const { rows: [{ recycled }] } = await sql.query('select public.lead_recycle_sweep() as recycled');
   console.log(`  recycled      ${recycled} closed leads back in queues`);
 
+  // Real-style Bark enquiries, written in the client's own words, at the front of the reps' queues.
+  const bark = (who, daysAgo, name, phone, country, service, message, extra = '') => ({
+    assigned_to: ids[who], assigned_at: new Date(now - DAY).toISOString(), stage: 'queue', status: 'new',
+    lead_date: addDays(today, -daysAgo), platform: 'Bark', country, name, phone, service,
+    personal_email: `${name.split(' ')[0].toLowerCase()}.${(name.split(' ')[1] ?? 'x').toLowerCase()}@gmail.com`,
+    query: `${extra}When the work should be done\nAs recommended by the pro\nMessage\n${message}`,
+    next_action_at: new Date(Date.parse(addDays(today, -daysAgo) + 'T04:00:00Z')).toISOString(),
+  });
+  await db.from('leads').insert([
+    bark('zoya', 160, 'Elizabeth Castillo', '(615) 555-0142', 'United States', 'Graphic Design',
+      'Looking for graphic design help for social platforms. My brand is launching soon - Healing Heart Co. (www.healingheartco.com) as well as my book- Dear Healing Heart (available may 5) . I have the content but need help with graphics and actioning it.'),
+    bark('zoya', 21, 'Marcus Bell', '(512) 555-0199', 'United States', 'Mobile App Development',
+      'I run a dog grooming business called Pawfect Cuts and need a booking app so clients can book and pay for appointments. We have 3 locations in Austin.',
+      'What type of app do you need?\nBooking app\nWhich platforms?\niOS and Android\n'),
+    bark('zoya', 6, 'Nina Patel', '+44 7700 900123', 'United Kingdom', 'Logo Design',
+      'Need a logo for my new podcast "The Quiet Hour" launching in November. Calm, minimal, works small on Spotify.'),
+    bark('hamza', 9, 'Dana Brooks', '(303) 555-0117', 'United States', 'E-commerce Store',
+      'Need a Shopify store for my candle brand, Ember & Oak (emberandoak.com). We have about 40 products and sell at markets right now.'),
+    bark('hamza', 3, 'Rob Hughes', '(713) 555-0164', 'United States', 'Web Design',
+      'Looking for someone to redesign our website www.smithplumbingtx.com, it is outdated and not mobile friendly. We get most work from Google.'),
+  ]);
+
+  // Zoya's own quick messages.
+  await sql.query(`insert into public.quick_messages (user_id, title, body, position, uses) values
+      ($1, 'Intro after a missed call', 'Hi {first name}, it''s {my name} from {company}. Just tried you about your {service} request. Is now a bad time, or is later today better?', 0, 14),
+      ($1, 'Sending portfolio', 'Hi {first name}, as promised here''s our portfolio: nuuke.com/work. Happy to walk you through anything similar to what you need. {my name}', 1, 6),
+      ($1, 'Busy, call back', 'No problem {first name}, I''ll give you a call back later. Reply with a time that suits and I''ll call then. {my name}, {company}', 2, 3)`,
+    [ids.zoya]);
+
+  // Break-time games: a finished one, one in progress, and an invite waiting for Zoya.
+  const blank = Array(64).fill('');
+  const chessStart = 'rnbqkbnrpppppppp'.split('').concat(blank.slice(0, 32), 'PPPPPPPPRNBQKBNR'.split(''));
+  chessStart[36] = 'P'; chessStart[52] = '';
+  const chessState = { board: chessStart, turn: 'b', castle: 'KQkq', ep: 44, half: 0, full: 1, last: [52, 36], seen: [] };
+  const ckBoard = blank.map((_, i) => ((Math.floor(i / 8) + (i % 8)) % 2 === 0 ? '' : Math.floor(i / 8) <= 2 ? 'b' : Math.floor(i / 8) >= 5 ? 'a' : ''));
+  const game = async (kind, host, guest, status, state, extra = {}) => {
+    const { rows: [g] } = await sql.query(
+      `insert into public.games (kind, host_id, status, state, turn_user, version, winner_id, result, started_at, finished_at, created_at, updated_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11) returning id`,
+      [kind, ids[host], status, JSON.stringify(state), extra.turn ? ids[extra.turn] : null, extra.version ?? 1,
+        extra.winner ? ids[extra.winner] : null, extra.result ?? null, status === 'waiting' ? null : new Date(now - 3 * 3600_000).toISOString(),
+        status === 'finished' ? new Date(now - 2 * 3600_000).toISOString() : null, new Date(now - (extra.minsAgo ?? 180) * 60_000).toISOString()]);
+    await sql.query(`insert into public.game_players (game_id, user_id, seat, status, responded_at) values ($1, $2, 0, 'joined', now()), ($1, $3, 1, $4, $5)`,
+      [g.id, ids[host], ids[guest], status === 'waiting' ? 'invited' : 'joined', status === 'waiting' ? null : new Date().toISOString()]);
+    return g.id;
+  };
+  await game('tictactoe', 'zoya', 'hamza', 'finished', { board: [0, 1, null, 1, 0, null, null, null, 0] }, { winner: 'zoya', result: 'win', version: 6 });
+  await game('chess', 'sana', 'zoya', 'active', chessState, { turn: 'zoya', version: 2, minsAgo: 40 });
+  await game('checkers', 'hamza', 'zoya', 'waiting', { board: ckBoard, turn: 0, chain: null, last: null, quiet: 0 }, { minsAgo: 20 });
+  console.log('  games         3 (one invite waiting for Zoya)');
+
   // A public holiday last month, to show it on calendars.
   await db.from('holidays').insert({ day: workDays[3], name: 'Company holiday' });
 
@@ -589,6 +640,7 @@ async function main() {
   await db.from('notifications').insert([
     note('zoya', 'deal.won', 'Deal closed!', 'You are past your monthly target — commission unlocked.', '/sales/pipeline', 'celebrate', 600),
     note('zoya', 'leads.assigned', '120 new leads are waiting for you', 'Press Start on the dialer to work through them.', '/sales', 'info', 90),
+    note('zoya', 'game.invite', 'Hamza wants to play Checkers', 'Games open on your break. Join from Mini Games when you take one.', '/games', 'info', 20),
     note('hamza', 'meeting.soon', 'Meeting tonight at 9:00 PM', 'Discovery call on Zoom.', '/sales/meetings', 'info', 30),
     note('bilal', 'attendance.late', 'Short day — one day will be deducted', 'You signed in 31 minutes after your shift started.', '/me/pay', 'warning', 1500),
     note('admin', 'deal.won', 'Zoya Malik closed $4,800', 'Mobile App Development', '/admin/sales', 'celebrate', 600),

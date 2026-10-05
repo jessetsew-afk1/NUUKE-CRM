@@ -25,6 +25,9 @@ export type ContentPost = T['content_posts']['Row'];
 export type ProjectEvent = T['project_events']['Row'];
 export type ProjectMessage = T['project_messages']['Row'];
 export type ProjectActivity = T['project_activity']['Row'];
+export type QuickMessage = T['quick_messages']['Row'];
+export type Game = T['games']['Row'];
+export type GamePlayer = T['game_players']['Row'];
 
 export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';

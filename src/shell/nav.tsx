@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   BarChart3, CalendarDays, ClipboardList, Columns3, Eye, FileSpreadsheet, FolderKanban, Gauge, Headphones, History, Kanban,
-  LayoutDashboard, ListTodo, Megaphone, MessagesSquare, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles,
+  LayoutDashboard, ListTodo, Megaphone, MessagesSquare, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles, Gamepad2,
 } from 'lucide-react';
 import type { Role } from '@/lib/types';
 
@@ -10,7 +10,7 @@ export interface NavItem {
   /** A count on the item; `urgent` makes it the pulsing red dot. */
   badge?: number; urgent?: boolean;
 }
-export interface NavContext { projectId?: number | null; reviews?: number; unread?: number; techManager?: boolean }
+export interface NavContext { projectId?: number | null; reviews?: number; unread?: number; techManager?: boolean; games?: number }
 export interface NavGroup { label: string; items: NavItem[] }
 
 const i = (C: typeof Gauge) => <C className="size-[18px]" strokeWidth={2.1} />;
@@ -20,6 +20,10 @@ export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
   // Technical managers (any staff role) get their client meetings.
   if (ctx.techManager && role !== 'client') {
     groups[0].items.push({ to: '/meetings/tech', label: 'Client meetings', short: 'Meetings', icon: i(Video) });
+  }
+  // Break-time games for everyone on the team.
+  if (role !== 'client') {
+    groups[groups.length - 1].items.push({ to: '/games', label: 'Mini Games', short: 'Games', icon: i(Gamepad2), badge: ctx.games });
   }
   return groups;
 }

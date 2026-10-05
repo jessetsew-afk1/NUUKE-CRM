@@ -18,6 +18,7 @@ import { defaultProject, usePendingReviews, useProjects, useUnread, useCurrentPr
 import { ReviewDot } from '@/projects/bits';
 import { ErrorBoundary } from '@/app/recovery';
 import { navFor, type NavItem } from './nav';
+import { gamesNeedingMe, useMyGames } from '@/data/games';
 import { Logo } from './Logo';
 
 const ROLE_LABEL = { admin: 'Admin', sales: 'Sales', production: 'Production', client: 'Client' } as const;
@@ -35,7 +36,10 @@ export function Shell({ children }: { children: ReactNode }) {
   const reviews = (pending.data ?? []).filter((f) => f.project_id === projectId).length;
   const unreadCount = (unread.data ?? []).reduce((s, u) => s + (role !== 'client' || u.project_id === projectId ? Number(u.unread) : 0), 0);
   const techManager = !!profile?.is_technical_manager;
-  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager }), [role, projectId, reviews, unreadCount, techManager]);
+  const myGames = useMyGames(role !== 'client');
+  const need = gamesNeedingMe(myGames.data, profile?.id);
+  const games = need.invites + need.myTurn;
+  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager, games }), [role, projectId, reviews, unreadCount, techManager, games]);
 
   return (
     <div className="relative z-10 min-h-dvh">

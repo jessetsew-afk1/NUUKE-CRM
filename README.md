@@ -18,10 +18,16 @@ agent for every person who signs in.
   - **Card:** name, emails, platform, service, date, query details, old notes from the sheet, and call history.
     - **Phone numbers:** each number gets its own **Copy** and **Call** button, so a lead with two or three numbers is dialled one number at a time in Zoom Phone.
     - **Edit:** fixes any detail, or adds numbers. The change is written on the lead's history.
-  - **Message ideas:** texts for Zoom Phone, emails (with **Open in email**) and a call opener, written automatically from the lead's query, or from their service when there's no query.
-    - They follow current cold-outreach practice: give the reason for calling, acknowledge the flood of calls marketplace leads get, ask one easy question, and end with a no-pressure break-up message.
+  - **Message ideas:** texts for Zoom Phone, emails (with **Open in email**) and a call opener, written from what the client wrote.
+    - **The query comes first.** NUUKE reads the part the client typed (on Bark, the text under *Message*) and picks out the details they gave: their brand or business name, their website, a book, podcast or event and when it comes out, what they already have ("I have the content") and what they need help with.
+      - Those details are written into every message. A card for someone launching *Healing Heart Co.* and a book called *Dear Healing Heart* opens with: "It was for Healing Heart Co., your brand, and also your book, Dear Healing Heart. Did the book come out on May 5 like you planned?"
+      - A **What they told us** strip shows the details it found, so the rep can check it read the query right.
+    - Only when there's no query are the messages written from the service they picked.
+    - They follow current cold-outreach practice: give the reason for calling, acknowledge the flood of calls marketplace leads get, ask one easy question about *their* thing, and end with a no-pressure break-up message.
+    - Plain punctuation only: no long dashes, which read as machine-written.
     - The messages that suit the current follow-up are highlighted.
     - Everything can be edited before copying. Do not call leads get no messages.
+  - **My quick messages:** each rep writes and saves their own messages (only they can see them) and copies them onto any lead. `{first name}`, `{my name}`, `{company}` and `{service}` are filled in for the lead on screen.
   - **Logging:** a status dropdown, one-tap shortcuts, notes, then **Done** or **Skip**. Every action is logged.
   - **Follow-ups:** a lead nobody picks up comes back on the next shift as follow-up 2 of 4, and so on.
   - **Recycling:** a lead that closes (no answer after 4 calls, not interested, wrong person, number not valid…) comes back to the same rep **2 days later** for a fresh round. The card shows how the last round ended and the rep's note. Only *Do not call* never comes back, and *Won* leads are clients.
@@ -37,6 +43,14 @@ agent for every person who signs in.
 - **Call log:** everything they've done, by day.
 - **Analytics:** dials, pick-up rate, prospects, meetings, closed amounts, funnel, outcome mix, forecast, and a projection to pay day.
 - **Leaderboard:** live podium by appointments, closed $, prospects, dials or connects. Totals only.
+
+**Everyone on the team: Mini Games**
+- Tic-Tac-Toe, Checkers, Chess and Ludo (2 to 4 players), in simple 2D.
+- **Break time only.** The games unlock when you start a break and lock again when it ends. Admins aren't on the clock, so they can always play.
+- **Invite anyone.** People on a break right now are listed first. Everyone else gets a notification and can join on their break.
+- Games wait between breaks: a move only counts while you're on a break, so a chess game can run over several days.
+- The database checks every move: whose turn it is, that you're on a break, and that nobody moved in between. It also rolls the Ludo dice, so nobody picks their own number.
+- Invites nobody answers lapse after 3 hours; a game nobody touches for a week ends.
 
 **Production (developers, designers, marketing)**
 - **My workspace:** today's tasks (overdue, today, this week) with tick-to-finish, team progress for the week, what's coming up, and every project they're on. Nobody sees a project they haven't been added to.
@@ -131,7 +145,7 @@ Demo logins (password `NuukeDemo!2026`):
 | Production | `faisal@nuuke.test`, `ayesha@nuuke.test`, `umar@nuuke.test` |
 | Clients | `sarah@halcyon.test` (two projects), `leo@brightbrew.test` |
 
-`node scripts/check-rules.mjs` signs in as different people and checks 85 permission and business rules.
+`node scripts/check-rules.mjs` signs in as different people and checks 108 permission and business rules.
 For example:
 - a rep cannot see a colleague's leads or pay
 - a client never sees internal tasks, files, or another client's project
@@ -183,8 +197,10 @@ there's nothing extra to sign up for. The free plan includes 1 GB, and Pro inclu
 ### Already live? Adding new parts
 When an update adds a new file to `supabase/migrations/`, run **only that file** in
 **SQL Editor → New query**: open it on GitHub, use **Copy raw file**, paste it in, then press **Run**.
-For example, `20261001001000_projects.sql` adds projects, the client portal and file storage, and
-`20261005000100_dialer_meetings.sql` adds lead editing, meeting time zones, technical managers and recycling.
+For example:
+- `20261001001000_projects.sql` adds projects, the client portal and file storage.
+- `20261005000100_dialer_meetings.sql` adds lead editing, meeting time zones, technical managers and recycling.
+- `20261005000200_quick_messages_games.sql` adds quick messages and Mini Games.
 
 ---
 
@@ -203,12 +219,14 @@ supabase/migrations/   the whole backend: tables, permissions, rules, jobs
   …900_schedule        pg_cron + live notifications
   …1000_projects       projects, sprints, tasks, files & reviews, calendars, messages, storage
   …20261005_dialer…    lead editing, meeting time zones & prep, technical managers, recycling
+  …20261005_quick_…    reps' quick messages; mini games (break-time rules, turns, dice)
 netlify/functions/     admin-users: create logins, reset passwords, switch access
 scripts/               seed.mjs + seed-projects.mjs (demo data), check-rules.mjs (permission tests)
 src/agent/             the agent artwork and wardrobe catalogue
 src/ui/                glass UI kit, charts, toasts
 src/shell/             sidebar, tab bar, shift clock, notifications
-src/sales/             the lead card, outcome form, message ideas (outreach.ts), meeting calendar & prep sheet
+src/sales/             the lead card, outcome form, message ideas (outreach.ts reads the query), quick messages, meeting calendar & prep sheet
+src/games/             Tic-Tac-Toe, Checkers, Chess and Ludo rules, and their boards
 src/lib/               phones.ts (splitting numbers), timezones.ts (client time zones)
 src/projects/          the project page: board, sprints, calendars, files & review viewer, messages
 src/pages/             sales/, admin/, work/ (production), portal/ (clients), me/ and shared pages

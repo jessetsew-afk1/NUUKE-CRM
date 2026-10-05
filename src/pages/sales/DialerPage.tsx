@@ -367,7 +367,7 @@ function DialSession({
 
       {/* the deck */}
       {!deck || outcomes.isLoading ? (
-        <div className="grid gap-5 lg:grid-cols-[1.25fr_1fr]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.25fr_1fr]">
           <Skeleton className="h-[520px] rounded-[32px]" />
           <Skeleton className="h-[420px] rounded-[32px]" />
         </div>
@@ -381,7 +381,7 @@ function DialSession({
           />
         </Panel>
       ) : (
-        <div className="grid items-start gap-5 lg:grid-cols-[1.25fr_1fr] lg:grid-rows-[auto_1fr]">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1.25fr_1fr] lg:grid-rows-[auto_1fr]">
           {/* Phones: card → log the call → message ideas. Desktop: card and ideas left, form right. */}
           <div className="relative lg:col-start-1 lg:row-start-1">
             {/* the cards waiting behind */}
