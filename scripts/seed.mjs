@@ -534,6 +534,49 @@ async function main() {
   );
   console.log(`  shifts        ${attendance.length}`);
 
+  // Meetings: clients across US (and a few UK) time zones, technical managers, prep -----
+  await sql.query(`update public.profiles set is_technical_manager = true where id = any($1)`, [[ids.faisal, ids.ayesha]]);
+  await sql.query(`
+    update public.meetings m set
+      timezone = (array['America/New_York','America/New_York','America/New_York','America/Chicago','America/Chicago',
+                        'America/Denver','America/Los_Angeles','America/Los_Angeles','America/Phoenix','Europe/London'])[1 + (m.id % 10)],
+      location = case when m.location is null or m.location = 'Zoom' then 'https://zoom.us/j/55' || lpad((m.id * 7919 % 1000000)::text, 7, '0') else m.location end`);
+  await sql.query(`
+    update public.meetings set technical_manager_id = case when id % 2 = 0 then $1::uuid else $2::uuid end
+     where starts_at > now() - interval '21 days' and id % 7 <> 0`, [ids.faisal, ids.ayesha]);
+  await sql.query(`
+    update public.meetings m set
+      client_website = 'https://www.' || coalesce(nullif(lower(regexp_replace(split_part(l.name, ' ', 2), '[^a-zA-Z0-9]', '', 'g')), ''), 'client') || 'studio.com',
+      client_links = 'instagram.com/' || lower(regexp_replace(l.name, '[^a-zA-Z0-9]', '', 'g')) || E'\nlinkedin.com/in/' || lower(regexp_replace(l.name, '[^a-zA-Z0-9]', '-', 'g')),
+      prep_notes = (array[
+        'Budget roughly $8–12k. Wants iOS first, Android later. Decision maker is her business partner — invite him.',
+        'Has a Shopify store doing ~$20k/month; cart abandonment is the pain. Asked for examples of stores we have rebuilt.',
+        'Burned by a freelancer before — needs a clear timeline and weekly updates. Very price-sensitive.',
+        'Wants to launch before the holidays. Asked about maintenance after launch and who owns the code.'])[1 + (m.id % 4)],
+      transcript = 'Rep: Hi ' || split_part(coalesce(nullif(l.name, ''), 'there'), ' ', 1) || ', it''s about the ' || lower(coalesce(l.service, 'project')) || E' you posted. Do you have two minutes?\n'
+        || E'Client: Sure, I''ve had a lot of calls about it, honestly.\n'
+        || E'Rep: I bet — I''ll be quick. What made you post it now?\n'
+        || E'Client: We''re losing customers to a competitor who already has one, and our current setup is all manual.\n'
+        || E'Rep: Makes sense. Is there a date you need it by?\n'
+        || E'Client: Ideally in about three months. Budget depends on what''s included.\n'
+        || E'Rep: Totally fair. Would it help to walk through options with our technical lead, so you get a realistic range?\n'
+        || E'Client: Yes, that would be great.'
+      from public.leads l
+     where l.id = m.lead_id and m.starts_at > now() - interval '7 days'`);
+
+  // Some leads came in with two or three numbers in one cell.
+  await sql.query(`
+    update public.leads set phone = phone || ' / +1 (' || (array['212','312','415','713','305','602','206','617'])[1 + (id % 8)]
+                                  || ') 555-' || lpad((id % 10000)::text, 4, '0')
+                                  || case when id % 4 = 0 then ', ' || (array['646','773','510','832'])[1 + (id % 4)] || '-555-' || lpad(((id * 7) % 10000)::text, 4, '0') else '' end
+     where phone is not null and id % 9 = 0`);
+
+  // When each closed lead actually closed: its last call (the bulk update above stamps "now").
+  await sql.query(`update public.leads set closed_at = coalesce(last_attempt_at, updated_at) where stage = 'closed'`);
+  // Closed leads older than the recycle window come back for a new round (as the 5-minute job does).
+  const { rows: [{ recycled }] } = await sql.query('select public.lead_recycle_sweep() as recycled');
+  console.log(`  recycled      ${recycled} closed leads back in queues`);
+
   // A public holiday last month, to show it on calendars.
   await db.from('holidays').insert({ day: workDays[3], name: 'Company holiday' });
 

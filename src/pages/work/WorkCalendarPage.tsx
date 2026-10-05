@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/app/auth';
 import { useAllSprints, useEvents, usePosts, useProjects, useTaskIndex } from '@/data/projects';
+import { useMeetingsWithLeads } from '@/data/sales';
+import { dayIn, fmtIn, zoneMeta } from '@/lib/timezones';
+import { Video } from 'lucide-react';
 import { Chip, PageHeader, Panel, Switch } from '@/ui/kit';
 import { CAL_LEGEND, calendarItems } from '@/projects/Calendar';
 import { MonthCalendar } from '@/projects/MonthCalendar';
@@ -13,6 +16,8 @@ export default function WorkCalendarPage() {
   const events = useEvents();
   const posts = usePosts();
   const sprints = useAllSprints();
+  const clientMeetings = useMeetingsWithLeads('tm', !!profile?.is_technical_manager);
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const navigate = useNavigate();
   const [only, setOnly] = useState<number | null>(null);
   const [mineOnly, setMineOnly] = useState(true);
@@ -32,6 +37,17 @@ export default function WorkCalendarPage() {
     onSprint: (s) => navigate(`/projects/${s.project_id}/sprints`),
     projectName: (id) => names.get(id),
   });
+  // Client meetings this person joins as technical manager.
+  for (const m of clientMeetings.data ?? []) {
+    if (m.status === 'cancelled') continue;
+    const z = zoneMeta(m.timezone);
+    items.push({
+      id: `cm${m.id}`, date: dayIn(m.starts_at, browserTz), title: `Client: ${m.leads?.name || m.title}`, color: z.color,
+      kind: 'Client meeting', time: fmtIn(m.starts_at, browserTz, 'time'),
+      sub: m.timezone ? `${fmtIn(m.starts_at, m.timezone, 'time')} ${z.label} for them` : null,
+      icon: <Video className="size-4" />, onClick: () => navigate(`/meetings/tech?meeting=${m.id}`),
+    });
+  }
 
   return (
     <>
@@ -44,7 +60,7 @@ export default function WorkCalendarPage() {
           <Switch checked={mineOnly} onChange={setMineOnly} label="Only my task deadlines" />
         </div>
       </Panel>
-      <Panel className="!p-5"><MonthCalendar items={items} legend={CAL_LEGEND} /></Panel>
+      <Panel className="!p-5"><MonthCalendar items={items} legend={profile?.is_technical_manager ? [...CAL_LEGEND, { label: 'Client meetings', color: '#0A84FF' }] : CAL_LEGEND} /></Panel>
     </>
   );
 }

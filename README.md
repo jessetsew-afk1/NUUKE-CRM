@@ -15,13 +15,25 @@ agent for every person who signs in.
 
 **Sales reps**
 - **Dialer.** Filter by service, platform and enquiry date, press **Start**, and work one card at a time.
-  - **Card:** name, emails, phone with **Copy** and **Call in Zoom**, platform, service, date, query details, old notes from the sheet, and call history.
+  - **Card:** name, emails, platform, service, date, query details, old notes from the sheet, and call history.
+    - **Phone numbers:** each number gets its own **Copy** and **Call** button, so a lead with two or three numbers is dialled one number at a time in Zoom Phone.
+    - **Edit:** fixes any detail, or adds numbers. The change is written on the lead's history.
+  - **Message ideas:** texts for Zoom Phone, emails (with **Open in email**) and a call opener, written automatically from the lead's query, or from their service when there's no query.
+    - They follow current cold-outreach practice: give the reason for calling, acknowledge the flood of calls marketplace leads get, ask one easy question, and end with a no-pressure break-up message.
+    - The messages that suit the current follow-up are highlighted.
+    - Everything can be edited before copying. Do not call leads get no messages.
   - **Logging:** a status dropdown, one-tap shortcuts, notes, then **Done** or **Skip**. Every action is logged.
-  - **Follow-ups:** a lead nobody picks up comes back on the next shift as follow-up 2 of 4, and so on. *Do not call*, *Number not valid* and the other closing statuses take it out of the queue.
+  - **Follow-ups:** a lead nobody picks up comes back on the next shift as follow-up 2 of 4, and so on.
+  - **Recycling:** a lead that closes (no answer after 4 calls, not interested, wrong person, number not valid…) comes back to the same rep **2 days later** for a fresh round. The card shows how the last round ended and the rep's note. Only *Do not call* never comes back, and *Won* leads are clients.
+  - **Booking a meeting:** the client's time zone is guessed from their area code. The rep types the time the client agreed to, and NUUKE shows Pakistan time next to it. The rep can also:
+    - pick a technical manager
+    - add the meeting link
+    - paste the call transcript
+    - add the client's website, socials and notes for the technical manager
   - **Progress:** a 250-a-day progress bar, a session timer, and a celebration at target.
 - **My leads:** search and filter every assigned lead; tap one to open its card iOS-style and log a call.
 - **Pipeline:** drag-and-drop Kanban (Prospect → Meeting → Proposal → Negotiation → Won/Lost) with values, likelihood, next steps and expected close dates.
-- **Meetings:** a week strip, upcoming meetings, and one tap to mark held, no-show or cancelled.
+- **Meetings:** a week strip, upcoming meetings, one tap to mark held, no-show or cancelled, and **Edit** to reschedule or change anything. The technical manager is told.
 - **Call log:** everything they've done, by day.
 - **Analytics:** dials, pick-up rate, prospects, meetings, closed amounts, funnel, outcome mix, forecast, and a projection to pay day.
 - **Leaderboard:** live podium by appointments, closed $, prospects, dials or connects. Totals only.
@@ -59,8 +71,17 @@ agent for every person who signs in.
   - Leads can go to one rep, be split evenly, or follow the sheet's *Assigned to* column.
   - 10,000 rows take about 2 seconds.
   - Then filter, bulk-assign, recycle or delete.
+- **Meetings calendar:** every meeting the team booked, in Week, Month or List view.
+  - Each meeting is coloured by the client's time zone, with the client's own time shown next to it.
+  - Times can be shown in Pakistan, Eastern, Central, Mountain, Pacific or UK time.
+  - Filter by rep, technical manager or time zone. See which upcoming meetings have no technical manager yet.
 - **Projects:** create a project, choose its team and project lead, and add the client's login (or create one on the spot). Edit, mark delivered or archive it later. A **client messages** inbox shows the latest from every client.
-- **Team & access:** create logins, set role, salary in PKR, shift time and length, working days, dial and dollar targets; reset passwords; switch logins off.
+- **Team & access:** create logins, set role, salary in PKR, shift time and length, working days, dial and dollar targets; reset passwords; switch logins off; mark people as **technical managers**.
+
+**Technical managers** (any staff member the admin marks)
+- **Client meetings:** the meetings they've been put on, as a calendar and an "Up next" list.
+- **Prep sheet:** each meeting shows the lead's numbers, emails and query, plus everything the rep added: website, socials, notes and the call transcript.
+- **Alerts:** they're notified when a meeting is booked, moved or cancelled, and 15 minutes before it starts. Production staff also see these meetings on their calendar.
 - **Attendance:** a live board for any day, with each person's calendar, and day corrections (leave, holiday, forgiven late) with a note.
 - **Payroll:** each period's salaries, deductions, tiers and commission; full payslips; CSV export; **Release** to freeze a period and notify everyone.
 - **Activity log:** every change and every sign-in or sign-out.
@@ -81,7 +102,8 @@ agent for every person who signs in.
 | Sales ≤ 30% of target | 30% of salary |
 | 30%–100% | full salary |
 | ≥ 100% | full salary + 25% commission on the period's closings (USD → PKR at the set rate) |
-| Follow-ups | the next working day, up to 4 calls, then the lead is *exhausted* (admin can recycle) |
+| Follow-ups | the next working day, up to 4 calls, then the lead rests |
+| Recycling | every closed lead except *Do not call* (and *Won*) returns to the same rep after 2 days for a new round |
 
 ---
 
@@ -109,11 +131,14 @@ Demo logins (password `NuukeDemo!2026`):
 | Production | `faisal@nuuke.test`, `ayesha@nuuke.test`, `umar@nuuke.test` |
 | Clients | `sarah@halcyon.test` (two projects), `leo@brightbrew.test` |
 
-`node scripts/check-rules.mjs` signs in as different people and checks 63 permission and business rules.
+`node scripts/check-rules.mjs` signs in as different people and checks 85 permission and business rules.
 For example:
 - a rep cannot see a colleague's leads or pay
 - a client never sees internal tasks, files, or another client's project
 - only the client can approve a deliverable
+- a rep can only edit their own leads
+- a technical manager sees only their own meetings and those leads
+- Do not call never comes back
 
 ---
 
@@ -158,7 +183,8 @@ there's nothing extra to sign up for. The free plan includes 1 GB, and Pro inclu
 ### Already live? Adding new parts
 When an update adds a new file to `supabase/migrations/`, run **only that file** in
 **SQL Editor → New query**: open it on GitHub, use **Copy raw file**, paste it in, then press **Run**.
-For example, `20261001001000_projects.sql` adds projects, the client portal and file storage.
+For example, `20261001001000_projects.sql` adds projects, the client portal and file storage, and
+`20261005000100_dialer_meetings.sql` adds lead editing, meeting time zones, technical managers and recycling.
 
 ---
 
@@ -176,11 +202,14 @@ supabase/migrations/   the whole backend: tables, permissions, rules, jobs
   …800_import_keep_…   lead import keeps repeats, drops blank rows
   …900_schedule        pg_cron + live notifications
   …1000_projects       projects, sprints, tasks, files & reviews, calendars, messages, storage
+  …20261005_dialer…    lead editing, meeting time zones & prep, technical managers, recycling
 netlify/functions/     admin-users: create logins, reset passwords, switch access
 scripts/               seed.mjs + seed-projects.mjs (demo data), check-rules.mjs (permission tests)
 src/agent/             the agent artwork and wardrobe catalogue
 src/ui/                glass UI kit, charts, toasts
 src/shell/             sidebar, tab bar, shift clock, notifications
+src/sales/             the lead card, outcome form, message ideas (outreach.ts), meeting calendar & prep sheet
+src/lib/               phones.ts (splitting numbers), timezones.ts (client time zones)
 src/projects/          the project page: board, sprints, calendars, files & review viewer, messages
 src/pages/             sales/, admin/, work/ (production), portal/ (clients), me/ and shared pages
 ```

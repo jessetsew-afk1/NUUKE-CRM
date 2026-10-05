@@ -6,12 +6,15 @@ import { CalendarCheck, CalendarX, Check, ChevronLeft, ChevronRight, Clock, Link
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/app/auth';
 import { useMeetings } from '@/data/sales';
-import { must, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import type { Meeting } from '@/lib/types';
 import { Agent } from '@/agent/Agent';
-import { Button, Empty, IconButton, Input, PageHeader, Panel, Pill, Segmented, Sheet, Skeleton, Stat, Textarea } from '@/ui/kit';
+import { Button, Empty, IconButton, PageHeader, Panel, Pill, Segmented, Skeleton, Stat } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
-import { time, toLocalInput } from '@/lib/format';
+import { time } from '@/lib/format';
+import { fmtIn, zoneMeta } from '@/lib/timezones';
+import { usePeople } from '@/data/common';
+import { MeetingSheet } from '@/sales/MeetingSheet';
 
 const STATUS = {
   scheduled: { label: 'Scheduled', tone: 'info' as const },
@@ -25,7 +28,7 @@ export default function MeetingsPage() {
   const meetings = useMeetings();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selected, setSelected] = useState<Date | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Meeting | 'new' | null>(null);
   const [view, setView] = useState<'upcoming' | 'past'>('upcoming');
 
   const all = meetings.data ?? [];
@@ -56,7 +59,7 @@ export default function MeetingsPage() {
 
   return (
     <>
-      <PageHeader title="Meetings" sub="Everything you have booked, and what happened." right={<Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setAdding(true)}>Add meeting</Button>} />
+      <PageHeader title="Meetings" sub="Everything you have booked, and what happened." right={<Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setEditing('new')}>Add meeting</Button>} />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Coming up" value={upcoming.length} sub="scheduled" icon={<CalendarCheck className="size-4" />} accent="#7C5CFF" />
@@ -96,7 +99,7 @@ export default function MeetingsPage() {
       {needsOutcome.length > 0 && !selected && (
         <Panel className="mb-5" style={{ boxShadow: '0 0 0 1.5px rgba(255,159,10,.5), var(--shadow)' }}>
           <h3 className="mb-3 text-[15px] font-bold">Did these happen?</h3>
-          <div className="space-y-2">{needsOutcome.slice(0, 6).map((m) => <MeetingRow key={m.id} m={m} ask />)}</div>
+          <div className="space-y-2">{needsOutcome.slice(0, 6).map((m) => <MeetingRow key={m.id} m={m} ask onOpen={() => setEditing(m)} />)}</div>
         </Panel>
       )}
 
@@ -120,19 +123,22 @@ export default function MeetingsPage() {
           {groups.map(([label, ms]) => (
             <section key={label}>
               <div className="text-3 mb-2 px-1 text-[12px] font-bold uppercase tracking-[0.12em]">{label}</div>
-              <div className="space-y-2">{ms.map((m) => <MeetingRow key={m.id} m={m} />)}</div>
+              <div className="space-y-2">{ms.map((m) => <MeetingRow key={m.id} m={m} onOpen={() => setEditing(m)} />)}</div>
             </section>
           ))}
         </div>
       )}
 
-      <AddMeeting open={adding} onClose={() => setAdding(false)} />
+      <MeetingSheet meeting={editing} onClose={() => setEditing(null)} />
     </>
   );
 }
 
-function MeetingRow({ m, ask }: { m: Meeting; ask?: boolean }) {
+function MeetingRow({ m, ask, onOpen }: { m: Meeting; ask?: boolean; onOpen: () => void }) {
   const qc = useQueryClient();
+  const people = usePeople();
+  const tm = m.technical_manager_id ? people.data?.find((p) => p.id === m.technical_manager_id) : null;
+  const z = zoneMeta(m.timezone);
   const toast = useToast();
   const setStatus = async (status: Meeting['status']) => {
     const { error } = await supabase.from('meetings').update({ status }).eq('id', m.id);
@@ -144,7 +150,7 @@ function MeetingRow({ m, ask }: { m: Meeting; ask?: boolean }) {
   const start = parseISO(m.starts_at);
   const soon = m.status === 'scheduled' && start.getTime() - Date.now() < 60 * 60_000 && start.getTime() > Date.now();
   return (
-    <motion.div layout className="glass flex flex-wrap items-center gap-4 rounded-[22px] px-4 py-3">
+    <motion.div layout onClick={onOpen} className="glass flex cursor-pointer flex-wrap items-center gap-4 rounded-[22px] px-4 py-3 hover:bg-[var(--glass-strong)]">
       <div className={clsx('grid w-[64px] shrink-0 place-items-center rounded-2xl py-1.5', soon ? 'bg-iris text-white' : 'fill')}>
         <span className="tabular text-[15px] font-extrabold">{format(start, 'h:mm')}</span>
         <span className={clsx('text-[11px] font-bold', !soon && 'text-3')}>{format(start, 'a')}</span>
@@ -152,7 +158,11 @@ function MeetingRow({ m, ask }: { m: Meeting; ask?: boolean }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-[15px] font-bold">{m.title}</div>
         <div className="text-2 flex flex-wrap items-center gap-x-3 text-[13px]">
+          {m.timezone && m.timezone !== 'Asia/Karachi' && (
+            <span className="font-semibold" style={{ color: z.color }}>{fmtIn(m.starts_at, m.timezone, 'time')} {z.label} for them</span>
+          )}
           <span>{m.duration_minutes} min · ends {time(new Date(start.getTime() + m.duration_minutes * 60_000))}</span>
+          {tm && <span>with {tm.full_name.split(' ')[0]} (tech)</span>}
           {m.location && (/^https?:/.test(m.location)
             ? <a href={m.location} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-iris"><Link2 className="size-3.5" />Join link</a>
             : <span className="inline-flex items-center gap-1"><Video className="size-3.5" />{m.location}</span>)}
@@ -160,7 +170,7 @@ function MeetingRow({ m, ask }: { m: Meeting; ask?: boolean }) {
         {m.notes && <div className="text-3 mt-0.5 truncate text-[12px]">{m.notes}</div>}
       </div>
       {ask || (m.status === 'scheduled' && start.getTime() < Date.now()) ? (
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
           <Button size="sm" variant="success" icon={<Check className="size-3.5" />} onClick={() => void setStatus('completed')}>Held</Button>
           <Button size="sm" variant="glass" icon={<UserX className="size-3.5" />} onClick={() => void setStatus('no_show')}>No-show</Button>
           <Button size="sm" variant="ghost" icon={<CalendarX className="size-3.5" />} onClick={() => void setStatus('cancelled')}>Cancelled</Button>
@@ -171,51 +181,3 @@ function MeetingRow({ m, ask }: { m: Meeting; ask?: boolean }) {
     </motion.div>
   );
 }
-
-function AddMeeting({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { profile } = useAuth();
-  const qc = useQueryClient();
-  const toast = useToast();
-  const [title, setTitle] = useState('');
-  const [at, setAt] = useState(() => toLocalInput(new Date(Math.ceil(Date.now() / 1_800_000) * 1_800_000 + 86_400_000)));
-  const [mins, setMins] = useState('30');
-  const [location, setLocation] = useState('Zoom');
-  const [notes, setNotes] = useState('');
-  const [busy, setBusy] = useState(false);
-  const save = async () => {
-    if (!title.trim() || !at) { toast({ title: 'Add a title and a time', tone: 'warning' }); return; }
-    setBusy(true);
-    try {
-      must(await supabase.from('meetings').insert({
-        owner_id: profile!.id, title: title.trim(), starts_at: new Date(at).toISOString(), duration_minutes: Number(mins),
-        location: location.trim() || null, notes: notes.trim() || null,
-      }).select());
-      void qc.invalidateQueries({ queryKey: ['meetings'] });
-      toast({ title: 'Meeting added', body: `${title} · ${format(new Date(at), 'EEE d MMM, h:mm a')}`, tone: 'success' });
-      setTitle(''); setNotes('');
-      onClose();
-    } catch (e) {
-      toast({ title: (e as Error).message, tone: 'danger' });
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Sheet open={open} onClose={onClose} title="Add a meeting" width={520}
-      footer={<><Button variant="glass" onClick={onClose}>Cancel</Button><Button variant="primary" loading={busy} onClick={save}>Add meeting</Button></>}>
-      <div className="space-y-4">
-        <Input label="With / about" placeholder="e.g. Discovery call — Maria Lopez" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <Input label="When" type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
-          <div>
-            <label className="label">Length</label>
-            <Segmented value={mins} onChange={setMins} options={[{ value: '15', label: '15m' }, { value: '30', label: '30m' }, { value: '45', label: '45m' }, { value: '60', label: '1h' }]} />
-          </div>
-        </div>
-        <Input label="Where" placeholder="Zoom, Google Meet, or paste the link" value={location} onChange={(e) => setLocation(e.target.value)} />
-        <Textarea label="Notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </div>
-    </Sheet>
-  );
-}
-

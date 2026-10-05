@@ -26,6 +26,8 @@ const WorkspacePage = lazy(() => import('@/pages/work/WorkspacePage'));
 const MyTasksPage = lazy(() => import('@/pages/work/MyTasksPage'));
 const WorkCalendarPage = lazy(() => import('@/pages/work/WorkCalendarPage'));
 const PortalPage = lazy(() => import('@/pages/portal/PortalPage'));
+const AdminMeetingsPage = lazy(() => import('@/pages/admin/AdminMeetingsPage'));
+const TechMeetingsPage = lazy(() => import('@/pages/TechMeetingsPage'));
 const AdminHome = lazy(() => import('@/pages/admin/AdminHome'));
 const AdminSales = lazy(() => import('@/pages/admin/AdminSales'));
 const AdminLeads = lazy(() => import('@/pages/admin/AdminLeads'));
@@ -99,6 +101,8 @@ export default function App() {
 
             <Route path="/admin" element={<Only roles={A}><AdminHome /></Only>} />
             <Route path="/admin/sales" element={<Only roles={A}><AdminSales /></Only>} />
+            <Route path="/admin/meetings" element={<Only roles={A}><AdminMeetingsPage /></Only>} />
+            <Route path="/meetings/tech" element={<Only roles={STAFF}><TechMeetingsPage /></Only>} />
             <Route path="/admin/leads" element={<Only roles={A}><AdminLeads /></Only>} />
             <Route path="/admin/people" element={<Only roles={A}><AdminPeople /></Only>} />
             <Route path="/admin/attendance" element={<Only roles={A}><AdminAttendance /></Only>} />

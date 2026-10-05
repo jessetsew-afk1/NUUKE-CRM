@@ -77,18 +77,30 @@ export default function AdminSettings() {
 
         <Panel>
           <PanelHeader title="Dialer" sub="How follow-ups are scheduled" />
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Days until a follow-up" type="number" {...num('followup_gap_days')} />
-            <Input label="Calls before a lead is exhausted" type="number" {...num('max_attempts')} />
+            <Input label="Calls in a round" type="number" {...num('max_attempts')} />
             <Input label="Default daily dial target" type="number" {...num('default_daily_dials')} />
+            <Input label="Closed leads come back after (days)" type="number" min={0} max={365} {...num('recycle_after_days')} hint="0 = never" />
           </div>
-          <p className="text-3 mt-3 text-[12px]">A lead that is not reached comes back on the rep's next working day, up to {form.max_attempts} calls. Do-not-call and invalid numbers leave the queue at once.</p>
+          <p className="text-3 mt-3 text-[12px]">
+            A lead that is not reached comes back on the rep's next working day, up to {form.max_attempts} calls.
+            {form.recycle_after_days > 0
+              ? ` Every closed lead (not interested, no answer, wrong person…) returns to the same rep for a fresh round ${form.recycle_after_days} day${form.recycle_after_days === 1 ? '' : 's'} later, with the last round's result on the card.`
+              : ' Closed leads stay closed until you recycle them from Leads & import.'}
+            {' '}Do not call never comes back, and won deals are clients.
+          </p>
         </Panel>
 
         <Panel>
-          <PanelHeader title="Company" />
+          <PanelHeader title="Company" sub="Also used in the reps' text and email ideas" />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Company name" value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
+            <Input label="Website" placeholder="nuuke.com" value={form.company_website ?? ''} onChange={(e) => setForm({ ...form, company_website: e.target.value || null })} />
+            <Input className="sm:col-span-2" label="What we are, in a few words" hint="“We're …”" value={form.company_pitch}
+              onChange={(e) => setForm({ ...form, company_pitch: e.target.value })} placeholder="a design and development studio" />
+            <Input className="sm:col-span-2" label="Booking link for emails" placeholder="https://calendly.com/…" value={form.booking_link ?? ''}
+              onChange={(e) => setForm({ ...form, booking_link: e.target.value || null })} />
             <Picker label="Timezone" value={form.timezone} onChange={(v) => setForm({ ...form, timezone: v })}
               options={['Asia/Karachi', 'Asia/Dubai', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'UTC'].map((t) => ({ value: t, label: t }))} />
           </div>

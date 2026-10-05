@@ -17,6 +17,7 @@ import type { Mood } from '@/agent/catalog';
 import { Button, Chip, Empty, Input, Kbd, PageHeader, Panel, ProgressBar, Ring, Skeleton } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { LeadCard } from '@/sales/LeadCard';
+import { OutreachPanel } from '@/sales/OutreachPanel';
 import { OutcomeForm, type OutcomePayload } from '@/sales/OutcomeForm';
 import { celebrate } from '@/lib/celebrate';
 import { addDaysISO, clock, count, firstName, greeting, localISO } from '@/lib/format';
@@ -380,8 +381,9 @@ function DialSession({
           />
         </Panel>
       ) : (
-        <div className="grid items-start gap-5 lg:grid-cols-[1.25fr_1fr]">
-          <div className="relative">
+        <div className="grid items-start gap-5 lg:grid-cols-[1.25fr_1fr] lg:grid-rows-[auto_1fr]">
+          {/* Phones: card → log the call → message ideas. Desktop: card and ideas left, form right. */}
+          <div className="relative lg:col-start-1 lg:row-start-1">
             {/* the cards waiting behind */}
             {deck.slice(1, 3).map((l, i) => (
               <motion.div
@@ -417,12 +419,13 @@ function DialSession({
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <LeadCard lead={current} outcomes={map} maxAttempts={maxAttempts} />
+                <LeadCard lead={current} outcomes={map} maxAttempts={maxAttempts}
+                  onEdited={(l) => setDeck((d) => d?.map((x) => (x.id === l.id ? l : x)) ?? d)} />
               </motion.div>
             </AnimatePresence>
           </div>
 
-          <Panel strong className="lg:sticky lg:top-24">
+          <Panel strong className="lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1">
             <OutcomeForm
               lead={current}
               outcomes={outcomes.data ?? []}
@@ -438,6 +441,9 @@ function DialSession({
               <span className="ml-auto">{session.done} done · {session.skipped} skipped this session</span>
             </div>
           </Panel>
+          <div className="lg:col-start-1 lg:row-start-2">
+            <OutreachPanel lead={current} />
+          </div>
         </div>
       )}
     </>
