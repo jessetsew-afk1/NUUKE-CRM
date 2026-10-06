@@ -62,6 +62,8 @@ export function fetchNextLeads(f: QueueFilters, limit = 3) {
 export function useFilterOptions() {
   return useQuery({
     queryKey: ['lead-filter-options'],
+    staleTime: 5 * 60_000,
+    retry: 2,
     queryFn: () => rpc<{
       services: { value: string; count: number }[];
       platforms: { value: string; count: number }[];
