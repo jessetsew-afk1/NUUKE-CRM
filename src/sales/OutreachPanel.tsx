@@ -7,6 +7,7 @@ import { useSettings } from '@/data/common';
 import type { Lead } from '@/lib/types';
 import { Pill } from '@/ui/kit';
 import { buildOutreach, type EmailMsg, type TextMsg } from './outreach';
+import { contactsOf } from '@/lib/phones';
 import { CopyButton } from './LeadCard';
 import { QuickMessages } from './QuickMessages';
 
@@ -37,7 +38,7 @@ export function OutreachPanel({ lead }: { lead: Lead }) {
     bookingLink: settings.data?.booking_link,
   }), [lead, profile, settings.data]);
 
-  const email = lead.personal_email || lead.work_email;
+  const email = contactsOf(lead).emails[0]?.value ?? null;
 
   // Never hand a rep words to send someone who asked not to be contacted.
   if (lead.status === 'do_not_call' || lead.closed_reason === 'do_not_call') {

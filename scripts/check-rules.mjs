@@ -341,6 +341,13 @@ const faisal = await as('faisal@nuuke.test');
     { name: 'Already hers', phone: has.phone, assigned_to: zoya.id }] });
   ok(imp.inserted === 1 && imp.duplicates === 2, 'An import brings a repeated client in once, and skips clients the dialer already has', JSON.stringify(imp));
   await service.from('leads').delete().eq('name', 'Check Twin');
+
+  // Telling clients apart when the sheet mixed up its columns
+  const key = async (phone, personal_email) => (await admin.c.rpc('lead_client_key', { p_phone: phone, p_personal_email: personal_email, p_work_email: null, p_name: 'x', p_post_link: null, p_query: null })).data;
+  const [k1, k2] = [await key('walrus07@yahoo.com', null), await key('reem07@mail.com', null)];
+  ok(k1 !== k2, 'Digits inside an email in the Phone column never make two people the same client', `${k1} vs ${k2}`);
+  const [k3, k4] = [await key('casey@gmail.com', '1-972-977-6900'), await key('(972) 977-6900', 'casey@gmail.com')];
+  ok(k3 === k4 && k3 === 'p:9729776900', 'A number typed in the email column is matched like one in the Phone column', `${k3} / ${k4}`);
 }
 
 // ---- quick messages: each rep's own

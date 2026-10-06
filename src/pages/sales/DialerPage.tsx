@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import clsx from 'clsx';
 import {
   CalendarClock, Filter, Flame, Headphones, Inbox, Play, Repeat, RotateCcw, SkipForward, Sparkles, Square, Timer, X,
 } from 'lucide-react';
@@ -276,12 +275,12 @@ function DialSession({
     const next = await fetchNextLeads(filters, 4);
     if (seq !== loadSeq.current) return;
     const now = Date.now();
-    const seen = new Set<string>(keep?.phone_key ? [keep.phone_key] : []);
+    const seen = new Set<string>(keep?.client_key ? [keep.client_key] : []);
     const fresh = next.filter((l) => {
       if (l.id === keep?.id || now - (recent.current.get(l.id) ?? 0) < 120_000) return false;
-      if (l.phone_key) {
-        if (seen.has(l.phone_key)) return false;
-        seen.add(l.phone_key);
+      if (l.client_key) {
+        if (seen.has(l.client_key)) return false;
+        seen.add(l.client_key);
       }
       return true;
     });
@@ -396,7 +395,7 @@ function DialSession({
 
       {/* the deck */}
       {!deck || outcomes.isLoading ? (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.25fr_1fr]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <Skeleton className="h-[520px] rounded-[32px]" />
           <Skeleton className="h-[420px] rounded-[32px]" />
         </div>
@@ -410,7 +409,7 @@ function DialSession({
           />
         </Panel>
       ) : (
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1.25fr_1fr] lg:grid-rows-[auto_1fr]">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:grid-rows-[auto_1fr]">
           {/* Phones: card → log the call → message ideas. Desktop: card and ideas left, form right. */}
           <div className="relative lg:col-start-1 lg:row-start-1">
             {/* the cards waiting behind */}
@@ -507,7 +506,7 @@ function FilterSummary({ filters }: { filters: QueueFilters }) {
     <div className="mt-3 flex flex-wrap items-center gap-1.5">
       <Filter className="text-3 size-3.5" />
       {parts.map((p) => (
-        <span key={p} className={clsx('fill rounded-full px-2.5 py-1 text-[12px] font-semibold')}>{p}</span>
+        <span key={p} title={p} className="fill max-w-[260px] truncate rounded-full px-2.5 py-1 text-[12px] font-semibold">{p}</span>
       ))}
       <span className="text-3 text-[12px]"><X className="inline size-3" /> End the session to change</span>
     </div>

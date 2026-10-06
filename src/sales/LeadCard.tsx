@@ -8,7 +8,7 @@ import {
 import type { Lead, LeadOutcome } from '@/lib/types';
 import { useLeadHistory, OUTCOME_TONE } from '@/data/sales';
 import { usePeople } from '@/data/common';
-import { splitPhones, zoomCallHref as zoomHref } from '@/lib/phones';
+import { contactsOf, zoomCallHref as zoomHref } from '@/lib/phones';
 import { Button, Pill, spring } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { ago, day, dateTime, friendly } from '@/lib/format';
@@ -119,7 +119,7 @@ export function LeadCard({
   onEdited?: (lead: Lead) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const phones = splitPhones(lead.phone);
+  const { phones, emails } = contactsOf(lead);
   const qa = parseQuery(lead.query);
   const label = attemptLabel(lead, maxAttempts);
   const status = outcomes.get(lead.status);
@@ -174,20 +174,13 @@ export function LeadCard({
         )) : (
           <Row icon={<Phone className="size-4" />}><span className="text-3">No phone number</span></Row>
         )}
-        {lead.personal_email && (
-          <Row icon={<Mail className="size-4" />}>
-            <a href={`mailto:${lead.personal_email}`} className="min-w-0 truncate font-semibold hover:underline">{lead.personal_email}</a>
-            <span className="text-3 text-xs">personal</span>
-            <CopyButton value={lead.personal_email} label="Email" />
+        {emails.map((e) => (
+          <Row key={e.value} icon={<Mail className="size-4" />}>
+            <a href={`mailto:${e.value}`} className="min-w-0 truncate font-semibold hover:underline" title={e.value}>{e.value}</a>
+            <span className="text-3 text-xs">{e.kind}</span>
+            <CopyButton value={e.value} label="Email" />
           </Row>
-        )}
-        {lead.work_email && (
-          <Row icon={<Mail className="size-4" />}>
-            <a href={`mailto:${lead.work_email}`} className="min-w-0 truncate font-semibold hover:underline">{lead.work_email}</a>
-            <span className="text-3 text-xs">work</span>
-            <CopyButton value={lead.work_email} label="Email" />
-          </Row>
-        )}
+        ))}
         {lead.post_link && (
           <Row icon={<ExternalLink className="size-4" />}>
             <a href={lead.post_link} target="_blank" rel="noreferrer" className="min-w-0 truncate font-semibold text-iris hover:underline">Open the original post</a>
@@ -202,7 +195,7 @@ export function LeadCard({
             {qa.map((p, i) => (
               <div key={i} className={clsx(!p.q && 'sm:col-span-2')}>
                 {p.q && <dt className="text-2 text-[12px] font-medium">{p.q}</dt>}
-                <dd className="mt-0.5 whitespace-pre-wrap text-[14px] font-semibold">{p.a}</dd>
+                <dd className="mt-0.5 whitespace-pre-wrap text-[14px] font-semibold [overflow-wrap:anywhere]">{p.a}</dd>
               </div>
             ))}
           </dl>

@@ -7,6 +7,7 @@ import { useSettings } from '@/data/common';
 import {
   logLeadAction, OUTCOME_TONE, outcomeMap, useFilterOptions, useLeadList, useOutcomes, useSalesRefresh, type LeadListFilters,
 } from '@/data/sales';
+import { contactsOf } from '@/lib/phones';
 import type { Lead } from '@/lib/types';
 import { Agent } from '@/agent/Agent';
 import { Empty, Input, PageHeader, Panel, Picker, Pill, Segmented, Sheet, Skeleton, Spinner, type Tone } from '@/ui/kit';
@@ -133,7 +134,7 @@ function LeadRow({
           {due && <Pill tone="warn" solid>Due</Pill>}
         </div>
         <div className="text-2 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px]">
-          {lead.phone && <span className="tabular inline-flex items-center gap-1 font-mono"><Phone className="size-3" />{lead.phone}</span>}
+          {contactsOf(lead).phones[0] && <span className="tabular inline-flex items-center gap-1 font-mono"><Phone className="size-3" />{contactsOf(lead).phones[0]}</span>}
           {lead.service && <span className="max-w-[260px] truncate" title={lead.service}>{lead.service}</span>}
           {lead.platform && <span className="text-3">{lead.platform}</span>}
           <span className="text-3">Enquired {dayShort(lead.lead_date)}</span>

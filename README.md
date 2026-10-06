@@ -16,8 +16,9 @@ agent for every person who signs in.
 **Sales reps**
 - **Dialer.** Filter by service, platform and enquiry date, press **Start**, and work one card at a time.
   - **Card:** name, emails, platform, service, date, query details, old notes from the sheet, and call history.
-    - **Phone numbers:** each number gets its own **Copy** and **Call** button, so a lead with two or three numbers is dialled one number at a time in Zoom Phone.
-    - **Edit:** fixes any detail, or adds numbers. The change is written on the lead's history.
+    - **Phone numbers:** each number gets its own **Copy** and **Call** button, so a lead with two or three numbers is dialled one number at a time in Zoom Phone. Numbers the sheet put under an email column, and emails it put under Phone, are shown where they belong.
+    - **Edit:** fixes any detail, or adds numbers. The change is written on the lead's history. Opening Edit on a card with mixed-up columns puts each number and email in the right box, so **Save** fixes it for good.
+    - Long links and queries wrap inside the card, so the outcome buttons and **Done** always stay on screen.
   - **Message ideas:** texts for Zoom Phone, emails (with **Open in email**) and a call opener, written from what the client wrote.
     - **The query comes first.** NUUKE reads the part the client typed (on Bark, the text under *Message*) and picks out the details they gave: their brand or business name, their website, a book, podcast or event and when it comes out, what they already have ("I have the content") and what they need help with.
       - Those details are written into every message. A card for someone launching *Healing Heart Co.* and a book called *Dear Healing Heart* opens with: "It was for Healing Heart Co., your brand, and also your book, Dear Healing Heart. Did the book come out on May 5 like you planned?"
@@ -88,7 +89,7 @@ agent for every person who signs in.
   - Columns are matched automatically and dates are read correctly.
   - Each client is imported once: a client who appears twice in the sheet becomes one card, and a dialer is never given a client they already have. Clients marked Do not call, or with a meeting set, are never handed out again. Blank rows are dropped.
   - Leads can go to one rep, be split evenly (every client to one rep), or follow the sheet's *Assigned to* column. Giving someone the whole sheet a second time only adds what they're missing.
-  - A client is matched by phone number (last ten digits), else personal email, else work email, else an identical row.
+  - A client is matched by phone number (last ten digits, at least 7 digits), else personal email, else work email, else an identical row. Columns the sheet mixed up are read correctly: a number under *Personal email* counts as the phone, an email under *Phone* counts as the email, and digits inside an email are never a phone number.
   - 10,000 rows take about 2 seconds.
   - Then filter, bulk-assign, recycle or delete.
   - **Remove repeats:** one click leaves each dialer one card per client, and each client with one dialer, except the dialers you mark as having the whole sheet. Call history, meetings and deals move onto the card that stays. Preview first; nothing changes until you press Remove.
@@ -211,6 +212,7 @@ For example:
 - `20261005000300_games_untracked_anytime.sql` lets people whose attendance isn't tracked play any time.
 - `20261006000100_one_client_one_dialer.sql` brings every client back every 2 days until Do not call or a meeting, one card per client, Remove repeats, and imports without repeats.
 - `20261006000200_fast_lead_access.sql` makes lead lists, the dialer's filters and counts fast with tens of thousands of leads.
+- `20261006000300_contact_keys.sql` reads phone numbers and emails typed in the wrong column, stops short stray digits from making different people one client, and reopens anyone the old matching closed by mistake. Run it before pressing **Remove repeats**.
 
 ---
 
@@ -231,6 +233,7 @@ supabase/migrations/   the whole backend: tables, permissions, rules, jobs
   …20261005_dialer…    lead editing, meeting time zones & prep, technical managers, recycling
   …20261005_quick_…    reps' quick messages; mini games (break-time rules, turns, dice)
   …20261006_one_client one client one card: 2-day repeats, Do not call/meeting for everyone, Remove repeats
+  …20261006_contact_…  who a client is when the sheet's phone and email columns are mixed up
 netlify/functions/     admin-users: create logins, reset passwords, switch access
 scripts/               seed.mjs + seed-projects.mjs (demo data), check-rules.mjs (permission tests)
 src/agent/             the agent artwork and wardrobe catalogue

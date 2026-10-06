@@ -968,7 +968,7 @@ export function buildOutreach(ctx: OutreachContext): Outreach {
   else if (d.biz) facts.push({ label: 'Business', value: `${cap(d.biz.replace(/^your /, ''))}${timingText(d.bizTiming)}` });
   for (const w of d.works) facts.push({ label: cap(w.kind), value: `${w.name}${timingText(w.timing)}` });
   if (d.site) facts.push({ label: 'Website', value: d.site });
-  if (d.socials.length) facts.push({ label: 'Socials', value: d.socials.join(', ') });
+  if (d.socials.length) facts.push({ label: 'Socials', value: d.socials.map((x) => { const t = x.replace(/[?#].*$/, ''); return t.length > 42 ? `${t.slice(0, 40)}…` : t; }).join(', ') });
   if (d.has.length) facts.push({ label: 'Already has', value: list(d.has) });
   if (d.start) facts.push({ label: 'Start', value: d.start });
   if (d.budget) facts.push({ label: 'Budget', value: d.budget });

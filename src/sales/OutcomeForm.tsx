@@ -232,11 +232,11 @@ export function OutcomeForm({
       <div className="flex items-center gap-2">
         {onSkip && (
           <Button variant="glass" size="lg" onClick={onSkip} disabled={busy} icon={<SkipForward className="size-4" />}>
-            Skip <span className="hidden sm:inline"><Kbd>S</Kbd></span>
+            Skip <span className="hidden 2xl:inline"><Kbd>S</Kbd></span>
           </Button>
         )}
-        <Button variant="primary" size="lg" className="flex-1" onClick={submit} loading={busy} iconRight={<ArrowRight className="size-4" />}>
-          {submitLabel} <span className="hidden opacity-60 sm:inline"><Kbd>⌘↵</Kbd></span>
+        <Button variant="primary" size="lg" className="min-w-0 flex-1" onClick={submit} loading={busy} iconRight={<ArrowRight className="size-4 shrink-0" />}>
+          <span className="truncate">{submitLabel}</span> <span className="hidden opacity-60 2xl:inline"><Kbd>⌘↵</Kbd></span>
         </Button>
       </div>
     </div>
