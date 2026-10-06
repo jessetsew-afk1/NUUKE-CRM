@@ -281,29 +281,66 @@ const faisal = await as('faisal@nuuke.test');
   const { error: e9 } = await zoya.c.from('meetings').update({ timezone: 'Mars/Olympus' }).eq('id', booked.meeting_id);
   ok(!!e9, 'An unknown time zone is refused', e9?.message);
 
-  // Recycling: everything except Do not call (and Won) comes back after the wait
-  const { data: three } = await admin.c.from('leads').select('id').eq('assigned_to', hamza.id).eq('stage', 'queue').limit(3);
-  const [dnc, ni, wonL] = three.map((x) => x.id);
-  const old = new Date(Date.now() - 3 * 86400000).toISOString();
-  await service.from('leads').update({ stage: 'closed', closed_reason: 'do_not_call', status: 'do_not_call' }).eq('id', dnc);
-  await service.from('leads').update({ stage: 'closed', closed_reason: 'not_interested', status: 'not_interested', last_comment: 'Said maybe next quarter' }).eq('id', ni);
-  await service.from('leads').update({ stage: 'closed', closed_reason: 'won', status: 'won' }).eq('id', wonL);
-  await service.from('leads').update({ closed_at: old }).in('id', [dnc, ni, wonL]);
-  const { error: e10 } = await service.rpc('lead_recycle_sweep');
-  const { data: after } = await service.from('leads').select('id, stage, recycle_count, previous_round').in('id', [dnc, ni, wonL]);
-  const by = new Map(after.map((x) => [x.id, x]));
-  ok(!e10 && by.get(ni).stage === 'queue' && by.get(ni).previous_round?.closed_reason === 'not_interested' && by.get(ni).previous_round?.comment === 'Said maybe next quarter',
-    'A “not interested” lead comes back after 2 days, remembering how the last round ended', e10?.message);
-  ok(by.get(dnc).stage === 'closed', 'A “do not call” lead never comes back');
-  ok(by.get(wonL).stage === 'closed', 'A won lead (a client) is not cold-called again');
-  const { data: fresh } = await admin.c.from('leads').select('id').eq('assigned_to', hamza.id).eq('stage', 'queue').neq('id', ni).limit(1).single();
-  await service.from('leads').update({ stage: 'closed', closed_reason: 'not_interested', status: 'not_interested' }).eq('id', fresh.id);
-  await service.rpc('lead_recycle_sweep');
-  const { data: tooSoon } = await service.from('leads').select('stage').eq('id', fresh.id).single();
-  ok(tooSoon.stage === 'closed', 'A lead closed today waits its 2 days');
-  const { data: adminBack } = await admin.c.rpc('recycle_leads', { p_lead_ids: [dnc, fresh.id] });
-  ok(adminBack === 1, 'The admin’s Recycle button brings back everything except Do not call', `${adminBack} of 2 recycled`);
-  await service.from('leads').update({ stage: 'queue', closed_reason: null, status: 'new' }).in('id', [dnc, wonL]);
+  // Repeats: every answer except Do not call or a meeting brings the client back in 2 days
+  const { data: hq } = await admin.c.from('leads').select('id').eq('assigned_to', hamza.id).eq('stage', 'queue').like('client_key', 'p:%').order('id').limit(4);
+  const back = [];
+  for (const [i, outcome] of ['not_interested', 'invalid_number', 'wrong_person'].entries()) {
+    const { data: r, error } = await hamza.c.rpc('log_lead_action', { p_lead_id: hq[i].id, p_action: 'call', p_outcome: outcome });
+    back.push(!error && r.lead.stage === 'queue' && Date.parse(r.lead.next_action_at) - Date.now() > 36 * 3600e3);
+  }
+  ok(back.every(Boolean), 'Not interested, invalid number and wrong person come back in 2 days instead of closing');
+  await service.from('leads').update({ attempts: 5 }).eq('id', hq[3].id);
+  const { data: sixth } = await hamza.c.rpc('log_lead_action', { p_lead_id: hq[3].id, p_action: 'call', p_outcome: 'contact_not_established' });
+  ok(sixth.lead.stage === 'queue' && !!sixth.lead.next_action_at, 'There is no last call: a 6th no-answer comes back like the first');
+
+  // One client, one answer: copies of the same client with other dialers
+  const twin = async (leadId, to, extra = {}) => {
+    const { data: l } = await service.from('leads').select('*').eq('id', leadId).single();
+    const { id: _i, client_key: _c, phone_key: _p, ...row } = l;
+    const { data } = await service.from('leads').insert({ ...row, assigned_to: to, stage: 'queue', status: 'new', attempts: 0, next_action_at: null, deal_id: null, skipped_at: null, ...extra }).select('id, client_key').single();
+    return data;
+  };
+  const { data: two } = await admin.c.from('leads').select('id').eq('assigned_to', hamza.id).eq('stage', 'queue').like('client_key', 'p:%').order('id', { ascending: false }).limit(2);
+  const dncCopy = await twin(two[0].id, zoya.id);
+  await hamza.c.rpc('log_lead_action', { p_lead_id: two[0].id, p_action: 'call', p_outcome: 'do_not_call' });
+  const { data: dc } = await service.from('leads').select('stage, status').eq('id', dncCopy.id).single();
+  ok(dc.stage === 'closed' && dc.status === 'do_not_call', "Do not call with one dialer takes the client off every dialer's cards");
+  const meetCopy = await twin(two[1].id, zoya.id);
+  await hamza.c.rpc('log_lead_action', { p_lead_id: two[1].id, p_action: 'call', p_outcome: 'meeting_booked', p_meeting_at: new Date(Date.now() + 3 * 86400000).toISOString() });
+  const { data: mc } = await service.from('leads').select('stage, last_comment').eq('id', meetCopy.id).single();
+  ok(mc.stage === 'closed', 'A meeting set by one dialer stops the other dialers calling that client', mc.last_comment);
+
+  // The deck never shows the same client twice
+  const { data: due } = await zoya.c.rpc('next_leads', { p_limit: 1 });
+  const dueTwin = await twin(due[0].id, zoya.id);
+  const { data: deck } = await zoya.c.rpc('next_leads', { p_limit: 20 });
+  ok(deck.filter((l) => l.client_key === dueTwin.client_key).length <= 1, 'The dialer deck never shows the same client twice');
+
+  // Remove repeats: a second copy for the same dialer, and the same client with two dialers
+  const sharedTwin = await twin(due[0].id, hamza.id);
+  await hamza.c.rpc('log_lead_action', { p_lead_id: sharedTwin.id, p_action: 'call', p_outcome: 'voicemail', p_comment: 'Left a VM on the copy' });
+  const { error: eTidyRep } = await zoya.c.rpc('tidy_repeat_leads', { p_whole_sheet: [], p_apply: false });
+  ok(!!eTidyRep, 'Only an admin can remove repeats', eTidyRep?.message);
+  const { data: prev } = await admin.c.rpc('tidy_repeat_leads', { p_whole_sheet: [], p_apply: false });
+  const { count: stillThere } = await service.from('leads').select('*', { count: 'exact', head: true }).eq('client_key', dueTwin.client_key);
+  ok(prev.own_repeats >= 1 && prev.shared >= 1 && stillThere === 3, 'Remove repeats previews without changing anything', `${prev.own_repeats} own, ${prev.shared} shared`);
+  const { data: tidy, error: eTidy } = await admin.c.rpc('tidy_repeat_leads', { p_whole_sheet: [], p_apply: true });
+  const { data: left } = await service.from('leads').select('id, assigned_to').eq('client_key', dueTwin.client_key);
+  const { data: vm } = await service.from('lead_attempts').select('lead_id').eq('comment', 'Left a VM on the copy');
+  ok(!eTidy && left.length === 1 && vm[0]?.lead_id === left[0].id, 'Remove repeats leaves one card for the client, with the call history moved onto it', `${tidy?.own_repeats} own, ${tidy?.shared} shared removed`);
+  const wholeTwin = await twin(left[0].id, left[0].assigned_to === zoya.id ? hamza.id : zoya.id);
+  await admin.c.rpc('tidy_repeat_leads', { p_whole_sheet: [hamza.id, zoya.id], p_apply: true });
+  const { count: kept } = await service.from('leads').select('*', { count: 'exact', head: true }).eq('client_key', wholeTwin.client_key);
+  ok(kept === 2, 'Whole-sheet dialers each keep their own copy of a client');
+
+  // Imports: a client twice in the sheet comes in once; a client the dialer has is skipped
+  const { data: has } = await service.from('leads').select('phone').eq('assigned_to', zoya.id).not('phone', 'is', null).limit(1).single();
+  const { data: impId } = await admin.c.rpc('start_lead_import', { p_file_name: 'check.csv', p_total: 3 });
+  const { data: imp } = await admin.c.rpc('import_leads', { p_import_id: impId, p_skip_duplicates: false, p_skip_owned: true, p_rows: [
+    { name: 'Check Twin', phone: '(555) 010-4242', assigned_to: zoya.id }, { name: 'Check Twin again', phone: '555.010.4242', assigned_to: zoya.id },
+    { name: 'Already hers', phone: has.phone, assigned_to: zoya.id }] });
+  ok(imp.inserted === 1 && imp.duplicates === 2, 'An import brings a repeated client in once, and skips clients the dialer already has', JSON.stringify(imp));
+  await service.from('leads').delete().eq('name', 'Check Twin');
 }
 
 // ---- quick messages: each rep's own

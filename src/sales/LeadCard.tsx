@@ -59,11 +59,11 @@ export function parseQuery(text: string | null | undefined): { q: string; a: str
   return [...(intro.length ? [{ q: '', a: intro.join(' · ') }] : []), ...out];
 }
 
-export function attemptLabel(lead: Lead, maxAttempts: number) {
+export function attemptLabel(lead: Lead, _maxAttempts?: number) {
   if (lead.status === 'busy_callback' && lead.next_action_at) return { text: `Call-back · ${friendly(lead.next_action_at)}`, tone: 'info' as const };
   if (lead.stage === 'pipeline') return { text: 'Pipeline follow-up', tone: 'great' as const };
   if (lead.attempts === 0) return { text: 'First call', tone: 'iris' as const };
-  return { text: `Follow-up ${lead.attempts + 1} of ${maxAttempts}`, tone: 'warn' as const };
+  return { text: `Call ${lead.attempts + 1}`, tone: 'warn' as const };
 }
 
 export function CopyButton({ value, label, quiet, className }: { value: string; label: string; quiet?: boolean; className?: string }) {

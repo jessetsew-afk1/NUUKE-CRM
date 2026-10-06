@@ -155,8 +155,8 @@ function LeadRow({
 
 export function AttemptDots({ n, max }: { n: number; max: number }) {
   return (
-    <div className="flex items-center gap-1" title={`${n} of ${max} calls`}>
-      {Array.from({ length: max }, (_, i) => (
+    <div className="flex items-center gap-1" title={`${n} call${n === 1 ? '' : 's'}`}>
+      {Array.from({ length: Math.min(Math.max(max, n), 8) }, (_, i) => (
         <span key={i} className={clsx('h-1.5 flex-1 rounded-full', i < n ? 'bg-iris' : 'bg-[var(--fill-2)]')} />
       ))}
     </div>
@@ -196,19 +196,19 @@ export function LeadDetail({ lead: initial, onDone }: { lead: Lead; onDone: () =
       </div>
       {lead.stage === 'closed' && !['contact_not_established', 'voicemail', 'contact_established'].includes(lead.status) ? (
         <div className="fill h-fit rounded-[24px] p-5 text-[14px]">
-          <b>This lead is resting</b> ({lead.closed_reason === 'exhausted' ? 'no answer after all follow-ups' : map.get(lead.status)?.label ?? lead.closed_reason}).
+          <b>This lead is off the dialer</b> ({map.get(lead.status)?.label ?? lead.closed_reason}).
           <p className="text-2 mt-1">
-            {lead.closed_reason === 'do_not_call' ? 'They asked not to be called — it never comes back.'
-              : lead.closed_reason === 'won' ? 'Closed won — they are a client now.'
-                : (settings.data?.recycle_after_days ?? 2) > 0
-                  ? `It comes back to your queue for a fresh round ${lead.closed_at ? `around ${new Date(Date.parse(lead.closed_at) + (settings.data?.recycle_after_days ?? 2) * 864e5).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'soon'}.`
-                  : 'Ask your admin to recycle it if it deserves another round.'}
+            {lead.closed_reason === 'do_not_call' ? 'They asked not to be called. It never comes back, for anyone.'
+              : lead.closed_reason === 'won' ? 'Closed won. They are a client now.'
+                : lead.closed_reason === 'duplicate' ? (lead.last_comment?.startsWith('Meeting set') || lead.last_comment?.includes('meeting set')
+                  ? `${lead.last_comment}, so this copy stopped.` : 'This was a second copy of the same client, so it was closed.')
+                  : 'Ask your admin to bring it back if it deserves another round.'}
           </p>
         </div>
       ) : (
         <div className="fill h-fit rounded-[24px] p-5">
           <h3 className="mb-4 text-[15px] font-bold">Log a call</h3>
-          <OutcomeForm lead={lead} outcomes={outcomes.data ?? []} maxAttempts={settings.data?.max_attempts ?? 4} busy={busy} onSubmit={submit} submitLabel="Save call" autoFocusKeys={false} />
+          <OutcomeForm lead={lead} outcomes={outcomes.data ?? []} busy={busy} onSubmit={submit} submitLabel="Save call" autoFocusKeys={false} />
         </div>
       )}
     </div>

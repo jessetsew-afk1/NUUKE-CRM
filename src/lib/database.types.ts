@@ -850,6 +850,7 @@ export type Database = {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          client_key: string | null
           closed_at: string | null
           closed_reason: string | null
           connected: boolean
@@ -883,6 +884,7 @@ export type Database = {
           assigned_at?: string | null
           assigned_to?: string | null
           attempts?: number
+          client_key?: string | null
           closed_at?: string | null
           closed_reason?: string | null
           connected?: boolean
@@ -916,6 +918,7 @@ export type Database = {
           assigned_at?: string | null
           assigned_to?: string | null
           attempts?: number
+          client_key?: string | null
           closed_at?: string | null
           closed_reason?: string | null
           connected?: boolean
@@ -2146,7 +2149,12 @@ export type Database = {
         Returns: undefined
       }
       import_leads: {
-        Args: { p_import_id: number; p_rows: Json; p_skip_duplicates?: boolean }
+        Args: {
+          p_import_id: number
+          p_rows: Json
+          p_skip_duplicates?: boolean
+          p_skip_owned?: boolean
+        }
         Returns: Json
       }
       in_game: {
@@ -2249,6 +2257,7 @@ export type Database = {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          client_key: string | null
           closed_at: string | null
           closed_reason: string | null
           connected: boolean
@@ -2384,6 +2393,10 @@ export type Database = {
         Args: { p_period_start: string }
         Returns: number
       }
+      reopen_resting_leads: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       resolve_work_date: {
         Args: { p_at: string; p_profile: string }
         Returns: string
@@ -2502,6 +2515,10 @@ export type Database = {
         Args: { p_name: string }
         Returns: number
       }
+      tidy_repeat_leads: {
+        Args: { p_apply?: boolean; p_whole_sheet?: string[] }
+        Returns: Json
+      }
       tz_label: {
         Args: { p_tz: string }
         Returns: string
@@ -2518,6 +2535,7 @@ export type Database = {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          client_key: string | null
           closed_at: string | null
           closed_reason: string | null
           connected: boolean
@@ -2554,6 +2572,7 @@ export type Database = {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          client_key: string | null
           closed_at: string | null
           closed_reason: string | null
           connected: boolean

@@ -43,11 +43,10 @@ const presetsCallback = () => {
 };
 
 export function OutcomeForm({
-  lead, outcomes, maxAttempts, busy, onSubmit, onSkip, submitLabel = 'Done, next card', autoFocusKeys = true,
+  lead, outcomes, busy, onSubmit, onSkip, submitLabel = 'Done, next card', autoFocusKeys = true,
 }: {
   lead: Lead;
   outcomes: LeadOutcome[];
-  maxAttempts: number;
   busy?: boolean;
   onSubmit: (p: OutcomePayload) => void;
   onSkip?: () => void;
@@ -62,7 +61,8 @@ export function OutcomeForm({
   const [zoneWhy, setZoneWhy] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const settings = useSettings();
-  const recycleDays = settings.data?.recycle_after_days ?? 2;
+  const gapDays = settings.data?.followup_gap_days ?? 2;
+  const inDays = <b>{gapDays} day{gapDays === 1 ? '' : 's'}</b>;
   const [error, setError] = useState<string | null>(null);
   const commentRef = useRef<HTMLTextAreaElement>(null);
 
@@ -80,8 +80,6 @@ export function OutcomeForm({
     [outcomes],
   );
 
-  const attemptNo = lead.attempts + 1;
-  const lastTry = o?.effect === 'retry' && attemptNo >= maxAttempts;
 
   const submit = () => {
     setError(null);
@@ -185,15 +183,19 @@ export function OutcomeForm({
               {o.effect === 'pipeline' && (
                 <WhenField label="Remind me to call again" optional value={followup} onChange={setFollowup} presets={presetsCallback()} />
               )}
+              {o.effect === 'pipeline' && o.pipeline_stage === 'prospect' && !followup && (
+                <p className="text-2 -mt-2 text-[12.5px]">No time picked? They come back to your cards in {inDays}, until a meeting is set.</p>
+              )}
+              {o.effect === 'pipeline' && o.pipeline_stage !== 'prospect' && (
+                <div className="fill flex items-center gap-2 rounded-2xl px-3.5 py-2.5 text-[13px]">
+                  <Info className="size-4 text-iris" /> Off the dialer cards now, and off any colleague's cards who has the same number.
+                </div>
+              )}
 
               {o.effect === 'retry' && !customFollowup && (
                 <div className="fill flex items-center gap-2 rounded-2xl px-3.5 py-2.5 text-[13px]">
                   <CalendarClock className="size-4 text-iris" />
-                  <span className="flex-1">
-                    {lastTry
-                      ? <>This was call <b>{attemptNo} of {maxAttempts}</b> — the lead rests{recycleDays > 0 ? <> and comes back in <b>{recycleDays} day{recycleDays === 1 ? '' : 's'}</b></> : ''}.</>
-                      : <>Comes back for <b>follow-up {attemptNo + 1} of {maxAttempts}</b> on your next shift.</>}
-                  </span>
+                  <span className="flex-1">Comes back to your cards in {inDays}, mixed in with the rest.</span>
                   <button type="button" className="font-bold text-iris" onClick={() => setCustomFollowup(true)}>Pick a time</button>
                 </div>
               )}
@@ -203,15 +205,12 @@ export function OutcomeForm({
 
               {o.effect === 'closed' && o.key === 'do_not_call' && (
                 <div className="flex items-center gap-2 rounded-2xl bg-bad/10 px-3.5 py-2.5 text-[13px] font-medium text-bad">
-                  <Info className="size-4" /> Never called again — this lead stays off every queue for good.
+                  <Info className="size-4" /> Never called again. Every copy of this number leaves every dialer's cards.
                 </div>
               )}
               {o.effect === 'closed' && o.key !== 'won' && o.key !== 'do_not_call' && (
                 <div className="flex items-center gap-2 rounded-2xl bg-warn/12 px-3.5 py-2.5 text-[13px] font-medium text-warn">
-                  <Info className="size-4" />
-                  {recycleDays > 0
-                    ? <>Leaves your queue now and comes back for a fresh round in <b>{recycleDays} day{recycleDays === 1 ? '' : 's'}</b>, with today's notes on the card.</>
-                    : <>Leaves your queue. The admin can bring it back later.</>}
+                  <Info className="size-4" /> Leaves your cards for good: it's a second copy of a client you already have.
                 </div>
               )}
             </div>
