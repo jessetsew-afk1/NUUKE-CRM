@@ -260,10 +260,31 @@ function DialSession({
     return () => window.clearInterval(t);
   }, []);
 
+  // Cards load in the background while the dialer keeps going. A load that comes back
+  // after they've already moved on is stale, so it's dropped, and a card they've just
+  // logged is never shown again in the same breath, nor the same number twice.
+  const loadSeq = useRef(0);
+  const recent = useRef(new Map<number, number>());
   const load = useCallback(async (keep?: Lead) => {
+    const seq = ++loadSeq.current;
     const next = await fetchNextLeads(filters, 4);
-    setDeck(keep ? [keep, ...next.filter((l) => l.id !== keep.id)] : next);
+    if (seq !== loadSeq.current) return;
+    const now = Date.now();
+    const seen = new Set<string>(keep?.phone_key ? [keep.phone_key] : []);
+    const fresh = next.filter((l) => {
+      if (l.id === keep?.id || now - (recent.current.get(l.id) ?? 0) < 120_000) return false;
+      if (l.phone_key) {
+        if (seen.has(l.phone_key)) return false;
+        seen.add(l.phone_key);
+      }
+      return true;
+    });
+    setDeck(keep ? [keep, ...fresh] : fresh);
   }, [filters]);
+  const settle = (id: number) => {
+    loadSeq.current++;
+    recent.current.set(id, Date.now());
+  };
 
   useEffect(() => { void load(); }, [load]);
 
@@ -290,6 +311,7 @@ function DialSession({
     const color = o?.tone === 'bad' ? '#FF453A' : o?.tone === 'good' || o?.tone === 'great' ? '#30C46C' : o?.tone === 'info' ? '#0A84FF' : '#7C5CFF';
     setBusy(true);
     const prevDials = today.data?.dials;
+    settle(current.id);
     try {
       const res = await logLeadAction({ leadId: current.id, action: 'call', ...p });
       // Stamp the outcome on the card for a beat, then send it off.
@@ -318,6 +340,7 @@ function DialSession({
   const skip = async () => {
     if (!current || busy) return;
     setBusy(true);
+    settle(current.id);
     try {
       const res = await logLeadAction({ leadId: current.id, action: 'skip' });
       setExit({ dir: 'skip' });
@@ -429,7 +452,6 @@ function DialSession({
             <OutcomeForm
               lead={current}
               outcomes={outcomes.data ?? []}
-              maxAttempts={maxAttempts}
               busy={busy}
               onSubmit={done}
               onSkip={skip}

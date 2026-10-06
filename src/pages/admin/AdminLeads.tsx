@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Recycle, Search, Shuffle, Trash2, Upload, UserMinus, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eraser, Recycle, Search, Shuffle, Trash2, Upload, UserMinus, X } from 'lucide-react';
 import { useImports } from '@/data/admin';
 import { OUTCOME_TONE, outcomeMap, useOutcomes } from '@/data/sales';
 import { usePeople } from '@/data/common';
 import { must, rpc, supabase } from '@/lib/supabase';
 import type { Lead } from '@/lib/types';
 import { ImportWizard } from '@/admin/ImportWizard';
+import { TidySheet } from '@/admin/TidySheet';
 import { AgentAvatar } from '@/shell/AgentAvatar';
 import { Button, Chip, Input, PageHeader, Panel, Picker, Pill, Sheet, Skeleton } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
@@ -28,6 +29,7 @@ export default function AdminLeads() {
   const [allMatching, setAllMatching] = useState(false);
   const [importing, setImporting] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [tidying, setTidying] = useState(false);
   const [open, setOpen] = useState<Lead | null>(null);
   const people = usePeople();
   const reps = (people.data ?? []).filter((p) => p.role === 'sales' && p.is_active);
@@ -116,7 +118,10 @@ export default function AdminLeads() {
   return (
     <>
       <PageHeader title="Leads & import" sub="Upload the lead sheet, hand leads to reps, and keep the pipeline fed."
-        right={<Button variant="primary" icon={<Upload className="size-4" />} onClick={() => setImporting(true)}>Import a sheet</Button>} />
+        right={<>
+          <Button variant="glass" icon={<Eraser className="size-4" />} onClick={() => setTidying(true)}>Remove repeats</Button>
+          <Button variant="primary" icon={<Upload className="size-4" />} onClick={() => setImporting(true)}>Import a sheet</Button>
+        </>} />
 
       {imports.data && imports.data.length > 0 && (
         <div className="scroll-x no-scrollbar -mx-1 mb-4 flex gap-2 px-1">
@@ -222,6 +227,7 @@ export default function AdminLeads() {
 
       <AssignSheet open={assigning} onClose={() => setAssigning(false)} reps={reps} count={selCount} onAssign={assign} />
       <ImportWizard open={importing} onClose={() => setImporting(false)} reps={reps} />
+      <TidySheet open={tidying} onClose={() => setTidying(false)} reps={reps} />
       <Sheet open={!!open} onClose={() => setOpen(null)} width={760} title={open?.name || 'Lead'}>
         {open && <LeadCard lead={open} outcomes={omap} maxAttempts={4} compact onEdited={(l) => { setOpen(l); void qc.invalidateQueries({ queryKey: ['admin-leads'] }); }} />}
       </Sheet>

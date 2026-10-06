@@ -575,7 +575,9 @@ async function main() {
   await sql.query(`update public.leads set closed_at = coalesce(last_attempt_at, updated_at) where stage = 'closed'`);
   // Closed leads older than the recycle window come back for a new round (as the 5-minute job does).
   const { rows: [{ recycled }] } = await sql.query('select public.lead_recycle_sweep() as recycled');
-  console.log(`  recycled      ${recycled} closed leads back in queues`);
+  // Only Do not call, won and duplicates stay off the cards; everything else comes back every 2 days.
+  const { rows: [{ reopened }] } = await sql.query('select public.reopen_resting_leads() as reopened');
+  console.log(`  back in queues ${recycled + reopened} leads that had been closed`);
 
   // Real-style Bark enquiries, written in the client's own words, at the front of the reps' queues.
   const bark = (who, daysAgo, name, phone, country, service, message, extra = '') => ({

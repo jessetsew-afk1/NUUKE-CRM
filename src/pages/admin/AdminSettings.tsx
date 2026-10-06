@@ -76,19 +76,15 @@ export default function AdminSettings() {
         </Panel>
 
         <Panel>
-          <PanelHeader title="Dialer" sub="How follow-ups are scheduled" />
+          <PanelHeader title="Dialer" sub="How leads come back" />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input label="Days until a follow-up" type="number" {...num('followup_gap_days')} />
-            <Input label="Calls in a round" type="number" {...num('max_attempts')} />
+            <Input label="Days until a lead comes back" type="number" min={1} max={14} {...num('followup_gap_days')} />
             <Input label="Default daily dial target" type="number" {...num('default_daily_dials')} />
-            <Input label="Closed leads come back after (days)" type="number" min={0} max={365} {...num('recycle_after_days')} hint="0 = never" />
           </div>
           <p className="text-3 mt-3 text-[12px]">
-            A lead that is not reached comes back on the rep's next working day, up to {form.max_attempts} calls.
-            {form.recycle_after_days > 0
-              ? ` Every closed lead (not interested, no answer, wrong person…) returns to the same rep for a fresh round ${form.recycle_after_days} day${form.recycle_after_days === 1 ? '' : 's'} later, with the last round's result on the card.`
-              : ' Closed leads stay closed until you recycle them from Leads & import.'}
-            {' '}Do not call never comes back, and won deals are clients.
+            After every call, the client comes back to the same dialer {form.followup_gap_days} day{form.followup_gap_days === 1 ? '' : 's'} later
+            (days off are skipped), mixed in with the rest of their numbers, until they say Do not call or a meeting is set.
+            A call-back at a time the dialer picks comes back at that time.
           </p>
         </Panel>
 

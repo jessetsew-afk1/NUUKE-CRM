@@ -29,8 +29,12 @@ agent for every person who signs in.
     - Everything can be edited before copying. Do not call leads get no messages.
   - **My quick messages:** each rep writes and saves their own messages (only they can see them) and copies them onto any lead. `{first name}`, `{my name}`, `{company}` and `{service}` are filled in for the lead on screen.
   - **Logging:** a status dropdown, one-tap shortcuts, notes, then **Done** or **Skip**. Every action is logged.
-  - **Follow-ups:** a lead nobody picks up comes back on the next shift as follow-up 2 of 4, and so on.
-  - **Recycling:** a lead that closes (no answer after 4 calls, not interested, wrong person, number not valid…) comes back to the same rep **2 days later** for a fresh round. The card shows how the last round ended and the rep's note. Only *Do not call* never comes back, and *Won* leads are clients.
+  - **Coming back:** after every call the client comes back to the same dialer **2 days later** (days off are skipped), however many calls it takes. No answer, voicemail, not interested, wrong person and number not valid all come back.
+    - Only **Do not call**, a **meeting set** (and anything after it), or a **won** deal take a client off the cards.
+    - A call-back at a time the dialer picks comes back at that time.
+  - **One client, one card:** the queue shows due call-backs first, then new numbers and 2-day repeats shuffled together (a new shuffle each day). The same client is never shown twice in a session.
+    - Do not call with any dialer takes that client off every dialer's cards.
+    - When one dialer sets a meeting, the other dialers holding the same client stop calling them.
   - **Booking a meeting:** the client's time zone is guessed from their area code. The rep types the time the client agreed to, and NUUKE shows Pakistan time next to it. The rep can also:
     - pick a technical manager
     - add the meeting link
@@ -82,10 +86,12 @@ agent for every person who signs in.
 - **Overview:** who's online, on break, late or missing; today's floor numbers; alerts; top closers; lead health; payroll estimate.
 - **Leads & import:** upload the Google Sheet as CSV or Excel.
   - Columns are matched automatically and dates are read correctly.
-  - Every row is kept, repeats included; only blank rows (no name, phone or email) are dropped. Skipping numbers already in NUUKE is an optional tick box.
-  - Leads can go to one rep, be split evenly, or follow the sheet's *Assigned to* column.
+  - Each client is imported once: a client who appears twice in the sheet becomes one card, and a dialer is never given a client they already have. Clients marked Do not call, or with a meeting set, are never handed out again. Blank rows are dropped.
+  - Leads can go to one rep, be split evenly (every client to one rep), or follow the sheet's *Assigned to* column. Giving someone the whole sheet a second time only adds what they're missing.
+  - A client is matched by phone number (last ten digits), else personal email, else work email, else an identical row.
   - 10,000 rows take about 2 seconds.
   - Then filter, bulk-assign, recycle or delete.
+  - **Remove repeats:** one click leaves each dialer one card per client, and each client with one dialer, except the dialers you mark as having the whole sheet. Call history, meetings and deals move onto the card that stays. Preview first; nothing changes until you press Remove.
 - **Meetings calendar:** every meeting the team booked, in Week, Month or List view.
   - Each meeting is coloured by the client's time zone, with the client's own time shown next to it.
   - Times can be shown in Pakistan, Eastern, Central, Mountain, Pacific or UK time.
@@ -146,7 +152,7 @@ Demo logins (password `NuukeDemo!2026`):
 | Production | `faisal@nuuke.test`, `ayesha@nuuke.test`, `umar@nuuke.test` |
 | Clients | `sarah@halcyon.test` (two projects), `leo@brightbrew.test` |
 
-`node scripts/check-rules.mjs` signs in as different people and checks 112 permission and business rules.
+`node scripts/check-rules.mjs` signs in as different people and checks 117 permission and business rules.
 For example:
 - a rep cannot see a colleague's leads or pay
 - a client never sees internal tasks, files, or another client's project
@@ -203,6 +209,7 @@ For example:
 - `20261005000100_dialer_meetings.sql` adds lead editing, meeting time zones, technical managers and recycling.
 - `20261005000200_quick_messages_games.sql` adds quick messages and Mini Games.
 - `20261005000300_games_untracked_anytime.sql` lets people whose attendance isn't tracked play any time.
+- `20261006000100_one_client_one_dialer.sql` brings every client back every 2 days until Do not call or a meeting, one card per client, Remove repeats, and imports without repeats.
 
 ---
 
@@ -222,6 +229,7 @@ supabase/migrations/   the whole backend: tables, permissions, rules, jobs
   …1000_projects       projects, sprints, tasks, files & reviews, calendars, messages, storage
   …20261005_dialer…    lead editing, meeting time zones & prep, technical managers, recycling
   …20261005_quick_…    reps' quick messages; mini games (break-time rules, turns, dice)
+  …20261006_one_client one client one card: 2-day repeats, Do not call/meeting for everyone, Remove repeats
 netlify/functions/     admin-users: create logins, reset passwords, switch access
 scripts/               seed.mjs + seed-projects.mjs (demo data), check-rules.mjs (permission tests)
 src/agent/             the agent artwork and wardrobe catalogue

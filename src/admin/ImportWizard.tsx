@@ -94,7 +94,7 @@ export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: 
     setStep(0); setFileName(''); setRows([]); setHeader([]); setMap({}); setProgress(null); setError(null);
   };
 
-  const close = () => { if (progress && progress.done < rows.length) return; reset(); onClose(); };
+  const close = () => { if (progress && progress.done < unique.length) return; reset(); onClose(); };
 
   const load = useCallback(async (file: File) => {
     setError(null);
@@ -154,14 +154,34 @@ export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: 
     };
   }), [rows, map, dateMode]);
 
+  // The same client twice in a sheet is imported once, before the sheet is split, so two
+  // copies can never land on two dialers. Matched like the database's client_key: the
+  // phone (last ten digits), else personal email, else work email, else an identical
+  // name + post link + query.
+  const unique = useMemo(() => {
+    const seen = new Set<string>();
+    return parsed.filter((p) => {
+      if (!p.name.trim() && !p.phone && !p.personal_email && !p.work_email) return true; // blank: removed on import anyway
+      const digits = (p.phone ?? '').replace(/\D/g, '');
+      const email = (p.personal_email ?? '').trim().toLowerCase();
+      const work = (p.work_email ?? '').trim().toLowerCase();
+      const k = digits ? `p${digits.slice(-10)}` : email ? `e${email}` : work ? `w${work}`
+        : `n${p.name.trim().toLowerCase()}|${(p.post_link ?? '').trim()}|${(p.query ?? '').trim().slice(0, 200)}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [parsed]);
+
   const stats = useMemo(() => ({
+    repeats: parsed.length - unique.length,
     total: parsed.length,
     phone: parsed.filter((p) => p.phone).length,
     email: parsed.filter((p) => p.personal_email || p.work_email).length,
     dated: parsed.filter((p) => p.lead_date).length,
     services: new Set(parsed.map((p) => p.service).filter(Boolean)).size,
     blank: parsed.filter((p) => !p.name.trim() && !p.phone && !p.personal_email && !p.work_email).length,
-  }), [parsed]);
+  }), [parsed, unique]);
 
   const sheetNames = useMemo(() => [...new Set(parsed.map((p) => p.sheetAssigned).filter(Boolean))].sort(), [parsed]);
 
@@ -192,25 +212,25 @@ export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: 
   const run = async () => {
     setError(null);
     setStep(3);
-    const total = parsed.length;
+    const total = unique.length;
     setProgress({ done: 0, inserted: 0, duplicates: 0, invalid: 0 });
     try {
       const importId = await rpc<number>('start_lead_import', { p_file_name: fileName, p_total: total });
       let acc = { done: 0, inserted: 0, duplicates: 0, invalid: 0 };
       const CHUNK = 1000;
       for (let i = 0; i < total; i += CHUNK) {
-        const chunk = parsed.slice(i, i + CHUNK).map((p, j) => {
+        const chunk = unique.slice(i, i + CHUNK).map((p, j) => {
           const { sheetAssigned: _s, ...row } = p;
           void _s;
           return { ...row, assigned_to: ownerFor(p, i + j) };
         });
-        const res = await rpc<{ inserted: number; duplicates: number; invalid: number }>('import_leads', { p_import_id: importId, p_rows: chunk as never, p_skip_duplicates: skipDupes });
+        const res = await rpc<{ inserted: number; duplicates: number; invalid: number }>('import_leads', { p_import_id: importId, p_rows: chunk as never, p_skip_duplicates: skipDupes, p_skip_owned: true });
         acc = { done: Math.min(total, i + CHUNK), inserted: acc.inserted + res.inserted, duplicates: acc.duplicates + res.duplicates, invalid: acc.invalid + res.invalid };
         setProgress(acc);
       }
       await rpc('finish_lead_import', { p_import_id: importId });
       celebrate('big');
-      toast({ title: `${count(acc.inserted)} leads imported`, body: [acc.invalid ? `${count(acc.invalid)} blank rows removed` : '', acc.duplicates ? `${count(acc.duplicates)} duplicates skipped` : ''].filter(Boolean).join(' · ') || undefined, tone: 'celebrate' });
+      toast({ title: `${count(acc.inserted)} leads imported`, body: [acc.invalid ? `${count(acc.invalid)} blank rows removed` : '', stats.repeats ? `${count(stats.repeats)} repeated rows imported once` : '', acc.duplicates ? `${count(acc.duplicates)} numbers they already had skipped` : ''].filter(Boolean).join(' · ') || undefined, tone: 'celebrate' });
       void qc.invalidateQueries();
     } catch (e) {
       setError((e as Error).message);
@@ -218,7 +238,7 @@ export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: 
   };
 
   const canNext = step === 1 ? map.name !== undefined || map.phone !== undefined : step === 2 ? (assign !== 'single' || !!single) && (assign !== 'round_robin' || rr.length > 0) : true;
-  const finished = progress && progress.done >= parsed.length && step === 3;
+  const finished = progress && progress.done >= unique.length && step === 3;
 
   return (
     <Sheet open={open} onClose={close} title="Import leads" width={980}
@@ -228,7 +248,7 @@ export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: 
             <>
               <Button variant="ghost" className="mr-auto" icon={<ArrowLeft className="size-4" />} onClick={() => setStep((s) => s - 1)}>Back</Button>
               {step === 1 && <Button variant="primary" disabled={!canNext} iconRight={<ArrowRight className="size-4" />} onClick={() => setStep(2)}>Choose who gets them</Button>}
-              {step === 2 && <Button variant="primary" disabled={!canNext} icon={<Upload className="size-4" />} onClick={run}>Import {count(stats.total - stats.blank)} leads</Button>}
+              {step === 2 && <Button variant="primary" disabled={!canNext} icon={<Upload className="size-4" />} onClick={run}>Import up to {count(stats.total - stats.repeats - stats.blank)} leads</Button>}
             </>
           ) : finished ? <Button variant="primary" onClick={() => { reset(); onClose(); }}>Done</Button> : null
       }>
@@ -267,6 +287,7 @@ export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: 
                 <span><b>{count(stats.email)}</b> with an email</span>
                 <span><b>{stats.services}</b> services</span>
                 {stats.blank > 0 && <span className="font-bold text-warn">{count(stats.blank)} blank rows will be removed</span>}
+                {stats.repeats > 0 && <span className="font-bold text-warn">{count(stats.repeats)} rows repeat a client already in this sheet and will be imported once</span>}
                 {map.lead_date !== undefined && <span className={clsx(stats.dated < stats.total * 0.9 && 'font-bold text-warn')}><b>{count(stats.dated)}</b> dates read</span>}
               </div>
               <div>
@@ -311,7 +332,7 @@ export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: 
 
               {assign === 'round_robin' && (
                 <div>
-                  <div className="label">Reps to share between · {rr.length ? `about ${count(Math.ceil(stats.total / rr.length))} each` : 'pick at least one'}</div>
+                  <div className="label">Reps to share between · {rr.length ? `about ${count(Math.ceil(unique.length / rr.length))} each, every client to one rep` : 'pick at least one'}</div>
                   <div className="flex flex-wrap gap-2">
                     {reps.map((r) => (
                       <Chip key={r.id} active={rr.includes(r.id)} onClick={() => setRr((x) => (x.includes(r.id) ? x.filter((y) => y !== r.id) : [...x, r.id]))}>
@@ -344,11 +365,13 @@ export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: 
               )}
               <div className="fill space-y-2 rounded-[20px] p-4">
                 <p className="text-[13px]">
-                  Every row is imported, <b>including people who appear more than once</b>. Only blank rows — no name, phone or email — are removed
+                  Each client is imported once: a number that appears twice in the sheet becomes one card
+                  {stats.repeats > 0 ? <> ({count(stats.repeats)} repeats in this file)</> : null}, and a number a dialer already has isn't given to them again.
+                  So giving someone the whole sheet a second time only adds what they're missing. Blank rows are removed
                   {stats.blank > 0 ? <> ({count(stats.blank)} in this file)</> : null}. Old comments and follow-ups are kept on each card.
                 </p>
                 <Switch checked={skipDupes} onChange={setSkipDupes}
-                  label={<span className="text-[13px]">Skip numbers that are already in NUUKE <span className="text-3">(only tick this if you are re-uploading the same sheet)</span></span>} />
+                  label={<span className="text-[13px]">Also skip numbers any other dialer already has <span className="text-3">(keeps every client with one dialer)</span></span>} />
               </div>
             </div>
           )}
@@ -360,11 +383,11 @@ export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: 
                 {finished ? <Check className="size-8" /> : <Upload className="size-7" />}
               </motion.div>
               <h3 className="mt-4 text-xl font-extrabold">{finished ? 'Import complete' : 'Importing…'}</h3>
-              <ProgressBar className="mx-auto mt-5 max-w-md" value={progress.done} max={parsed.length} height={12} />
-              <p className="text-2 tabular mt-2 text-[13px]">{count(progress.done)} of {count(parsed.length)} rows</p>
-              <div className={clsx('mx-auto mt-6 grid max-w-md gap-2', skipDupes ? 'grid-cols-3' : 'grid-cols-2')}>
+              <ProgressBar className="mx-auto mt-5 max-w-md" value={progress.done} max={unique.length} height={12} />
+              <p className="text-2 tabular mt-2 text-[13px]">{count(progress.done)} of {count(unique.length)} clients</p>
+              <div className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-2">
                 <Result label="Imported" value={progress.inserted} color="#30C46C" />
-                {skipDupes && <Result label="Duplicates skipped" value={progress.duplicates} color="#FF9F0A" />}
+                <Result label="Already had them" value={progress.duplicates} color="#FF9F0A" />
                 <Result label="Blank rows removed" value={progress.invalid} color="#8E8AA0" />
               </div>
               {finished && assign !== 'none' && <p className="text-2 mt-5 text-[13px]">Each rep has been notified about their new leads.</p>}
