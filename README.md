@@ -210,6 +210,7 @@ For example:
 - `20261005000200_quick_messages_games.sql` adds quick messages and Mini Games.
 - `20261005000300_games_untracked_anytime.sql` lets people whose attendance isn't tracked play any time.
 - `20261006000100_one_client_one_dialer.sql` brings every client back every 2 days until Do not call or a meeting, one card per client, Remove repeats, and imports without repeats.
+- `20261006000200_fast_lead_access.sql` makes lead lists, the dialer's filters and counts fast with tens of thousands of leads.
 
 ---
 

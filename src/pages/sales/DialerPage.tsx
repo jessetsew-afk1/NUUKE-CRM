@@ -149,6 +149,12 @@ function Setup({ filters, setFilters, onStart }: { filters: QueueFilters; setFil
           </div>
 
           <div className="space-y-5">
+            {options.isError && (
+              <div className="flex items-center gap-3 rounded-2xl bg-warn/12 px-3.5 py-2.5 text-[13px] font-semibold text-warn">
+                <span className="flex-1">Couldn't load your filters just now.</span>
+                <Button size="sm" variant="glass" loading={options.isFetching} onClick={() => void options.refetch()}>Retry</Button>
+              </div>
+            )}
             <FilterBlock label="Service">
               {options.isLoading && <Skeleton className="h-9 w-full" />}
               <ChipList items={options.data?.services ?? []} selected={filters.services} onToggle={(v) => toggle('services', v)} />
