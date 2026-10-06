@@ -8,7 +8,7 @@ import { useAuth } from '@/app/auth';
 import { usePeople } from '@/data/common';
 import type { MeetingLead, MeetingWithLead } from '@/data/sales';
 import { must, supabase } from '@/lib/supabase';
-import { splitPhones, zoomCallHref } from '@/lib/phones';
+import { contactsOf, zoomCallHref } from '@/lib/phones';
 import { bothTimes, zoneMeta } from '@/lib/timezones';
 import type { Meeting } from '@/lib/types';
 import { AgentAvatar } from '@/shell/AgentAvatar';
@@ -136,7 +136,7 @@ export function MeetingPrep({ meeting }: { meeting: AnyMeeting }) {
   const start = Date.parse(meeting.starts_at);
   const live = start - Date.now() < 10 * 60_000 && start + meeting.duration_minutes * 60_000 > Date.now();
   const st = MEETING_STATUS[meeting.status as keyof typeof MEETING_STATUS] ?? MEETING_STATUS.scheduled;
-  const phones = splitPhones(lead?.phone);
+  const phones = contactsOf(lead ?? {}).phones;
   const qa = parseQuery(lead?.query);
   const links = (meeting.client_links ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
   const isLink = meeting.location && /^https?:/i.test(meeting.location);

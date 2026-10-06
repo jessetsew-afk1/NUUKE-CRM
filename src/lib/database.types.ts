@@ -2006,6 +2006,10 @@ export type Database = {
         Args: { p_move_to?: number; p_sprint: number }
         Returns: number
       }
+      contact_phone_digits: {
+        Args: { p_personal_email: string; p_phone: string }
+        Returns: string
+      }
       day_break_seconds: {
         Args: { p_day_id: number }
         Returns: number
@@ -2180,6 +2184,17 @@ export type Database = {
       is_work_day: {
         Args: { p_date: string; p_profile: string }
         Returns: boolean
+      }
+      lead_client_key: {
+        Args: {
+          p_name: string
+          p_personal_email: string
+          p_phone: string
+          p_post_link: string
+          p_query: string
+          p_work_email: string
+        }
+        Returns: string
       }
       lead_filter_options: {
         Args: Record<PropertyKey, never>

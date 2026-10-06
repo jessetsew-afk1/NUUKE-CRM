@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { ChevronDown, Clock, FileText, Globe, Link2, UserCog } from 'lucide-react';
 import { useTechManagers, type MeetingExtras } from '@/data/sales';
 import { ZONES, PKT, bothTimes, guessZone, isoToZonedInput, zoneMeta, zonedInputToISO } from '@/lib/timezones';
+import { contactsOf } from '@/lib/phones';
 import type { Lead, Meeting } from '@/lib/types';
 import { AgentAvatar } from '@/shell/AgentAvatar';
 import { Input, Label, Picker, Segmented, Textarea } from '@/ui/kit';
@@ -20,8 +21,8 @@ export interface MeetingDraft {
   prep: string;
 }
 
-export function draftForLead(lead: Pick<Lead, 'phone' | 'country'> | null): MeetingDraft & { why: string | null } {
-  const g = lead ? guessZone(lead.phone, lead.country) : null;
+export function draftForLead(lead: Pick<Lead, 'phone' | 'country' | 'personal_email' | 'work_email'> | null): MeetingDraft & { why: string | null } {
+  const g = lead ? guessZone(contactsOf(lead).phones[0] ?? lead.phone, lead.country) : null;
   return {
     tz: g?.id ?? 'America/New_York', why: g ? g.why : null,
     local: '', minutes: '30', tm: '', location: '', transcript: '', website: '', links: '', prep: '',

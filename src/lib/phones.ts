@@ -41,6 +41,44 @@ export function splitPhones(raw: string | null | undefined): string[] {
   return unique.length ? unique : [raw.trim()];
 }
 
+const EMAIL_RE = /[^\s|,;<>()"']+@[^\s|,;<>()"']+\.[a-z]{2,}/gi;
+
+export interface Contacts { phones: string[]; emails: { value: string; kind: 'personal' | 'work' }[] }
+
+/**
+ * A lead's phone numbers and emails, wherever the sheet put them. Rows often have
+ * them in each other's columns (an email under Phone, numbers under Email), so every
+ * contact field is read for both. A "number" needs at least 7 digits, so the digits
+ * in an email address are never mistaken for one.
+ */
+export function contactsOf(l: { phone?: string | null; personal_email?: string | null; work_email?: string | null }): Contacts {
+  const emails: Contacts['emails'] = [];
+  const seenEmail = new Set<string>();
+  const phoneText: string[] = [];
+  const fields: [string | null | undefined, 'personal' | 'work'][] = [[l.phone, 'personal'], [l.personal_email, 'personal'], [l.work_email, 'work']];
+  for (const [raw, kind] of fields) {
+    const text = raw ?? '';
+    for (const m of text.match(EMAIL_RE) ?? []) {
+      const k = m.toLowerCase();
+      if (!seenEmail.has(k)) { seenEmail.add(k); emails.push({ value: m, kind }); }
+    }
+    const rest = text.replace(EMAIL_RE, ' ');
+    if (digitsOf(rest).length >= 7) phoneText.push(rest);
+  }
+  const phones: string[] = [];
+  const seenPhone = new Set<string>();
+  for (const t of phoneText) {
+    for (const p of splitPhones(t)) {
+      const clean = p.trim().replace(/^[|,;/\s]+|[|,;/\s]+$/g, '');
+      const k = digitsOf(clean).slice(-10);
+      if (digitsOf(clean).length < 7 || seenPhone.has(k)) continue;
+      seenPhone.add(k);
+      phones.push(clean);
+    }
+  }
+  return { phones, emails };
+}
+
 /** How several numbers are stored back in the one phone field. */
 export const joinPhones = (list: string[]) => list.map((p) => p.trim()).filter(Boolean).join(' / ');
 

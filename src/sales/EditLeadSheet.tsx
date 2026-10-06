@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Phone, Plus, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc } from '@/lib/supabase';
-import { joinPhones, splitPhones } from '@/lib/phones';
+import { contactsOf, joinPhones, splitPhones } from '@/lib/phones';
 import type { Lead } from '@/lib/types';
 import { Button, IconButton, Input, Label, Sheet, Textarea } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
@@ -18,6 +18,23 @@ const fromLead = (l: Lead): Form => ({
   phones: (() => { const p = splitPhones(l.phone); return p.length ? p : ['']; })(),
 });
 
+/**
+ * The form starts from what the card shows: when the sheet had numbers in the email
+ * column (or an email under Phone), they're put in the right boxes, so saving fixes it.
+ */
+const tidyLead = (l: Lead): Form => {
+  const raw = fromLead(l);
+  const c = contactsOf(l);
+  const swapped = c.phones.join() !== splitPhones(l.phone).join() || (l.personal_email ?? '') !== (c.emails.find((e) => e.kind === 'personal')?.value ?? l.personal_email ?? '');
+  if (!swapped) return raw;
+  return {
+    ...raw,
+    phones: c.phones.length ? c.phones : [''],
+    personal_email: c.emails.filter((e) => e.kind === 'personal').map((e) => e.value).join(', '),
+    work_email: c.emails.filter((e) => e.kind === 'work').map((e) => e.value).join(', ') || raw.work_email,
+  };
+};
+
 /** Fix or complete a lead's details. Reps can edit their own leads; every change is logged on the lead. */
 export function EditLeadSheet({ lead, onClose, onSaved }: { lead: Lead | null; onClose: () => void; onSaved: (lead: Lead) => void }) {
   const [form, setForm] = useState<Form | null>(null);
@@ -28,7 +45,7 @@ export function EditLeadSheet({ lead, onClose, onSaved }: { lead: Lead | null; o
 
   if ((lead?.id ?? null) !== key) {
     setKey(lead?.id ?? null);
-    setForm(lead ? fromLead(lead) : null);
+    setForm(lead ? tidyLead(lead) : null);
   }
   if (!lead || !form) return <Sheet open={false} onClose={onClose}>{null}</Sheet>;
 
