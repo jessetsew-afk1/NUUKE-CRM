@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import clsx from 'clsx';
 import { useQueryClient } from '@tanstack/react-query';
-import { Clock, Dice5, KeyRound, Plus, Power, Search, Target, Wallet } from 'lucide-react';
+import { ArrowRightLeft, Clock, Dice5, KeyRound, Plus, Power, Search, Target, Wallet } from 'lucide-react';
 import { useAuth } from '@/app/auth';
-import { usePeopleAdmin, type Person } from '@/data/admin';
+import { hasWork, usePeopleAdmin, usePeopleWork, type Person, type PersonWork } from '@/data/admin';
+import { HandOverSheet } from '@/admin/HandOver';
 import { adminUsers, supabase } from '@/lib/supabase';
 import type { Role } from '@/lib/types';
 import { Agent } from '@/agent/Agent';
@@ -36,6 +37,8 @@ export default function AdminPeople() {
   const [tab, setTab] = useState<'all' | Role | 'off'>('all');
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<Person | 'new' | null>(null);
+  const [handing, setHanding] = useState<Person | null>(null);
+  const work = usePeopleWork();
 
   const list = useMemo(() => (people.data ?? []).filter((p) => {
     if (tab === 'off') return !p.is_active;
@@ -80,6 +83,7 @@ export default function AdminPeople() {
                     {p.department && <Pill tone="neutral">{p.department}</Pill>}
                     {p.is_technical_manager && <Pill tone="iris">Tech manager</Pill>}
                     {!p.is_active && <Pill tone="bad" solid>Off</Pill>}
+                    {!p.is_active && p.role === 'sales' && hasWork(work.data?.get(p.id)) && <Pill tone="warn">Work to hand over</Pill>}
                   </div>
                 </div>
               </div>
@@ -95,7 +99,9 @@ export default function AdminPeople() {
         </div>
       )}
 
-      <PersonSheet person={editing} onClose={() => setEditing(null)} />
+      <PersonSheet person={editing} onClose={() => setEditing(null)} work={editing && editing !== 'new' ? work.data?.get(editing.id) : undefined}
+        onHandOver={(p) => { setEditing(null); setHanding(p); }} />
+      <HandOverSheet person={handing} work={handing ? work.data?.get(handing.id) : undefined} reps={people.data ?? []} onClose={() => setHanding(null)} />
     </>
   );
 }
@@ -114,7 +120,12 @@ const genPassword = () => {
   return `${words[a[0] % words.length]}-${words[a[1] % words.length]}-${1000 + (a[2] % 9000)}`;
 };
 
-function PersonSheet({ person, onClose }: { person: Person | 'new' | null; onClose: () => void }) {
+function PersonSheet({ person, onClose, work, onHandOver }: {
+  person: Person | 'new' | null;
+  onClose: () => void;
+  work: PersonWork | undefined;
+  onHandOver: (p: Person) => void;
+}) {
   const isNew = person === 'new';
   const p = person && person !== 'new' ? person : null;
   const { profile } = useAuth();
@@ -189,6 +200,8 @@ function PersonSheet({ person, onClose }: { person: Person | 'new' | null; onClo
         toast({ title: 'Saved', body: form.password ? `New password: ${form.password}` : undefined, tone: 'success', duration: form.password ? 12000 : 3000 });
       }
       void qc.invalidateQueries();
+      // Switching off someone who still has clients: straight on to handing them over.
+      if (p && p.is_active && !form.active && p.role === 'sales' && hasWork(work)) { onHandOver(p); return; }
       onClose();
     } catch (e) {
       toast({ title: (e as Error).message, tone: 'danger' });
@@ -271,13 +284,35 @@ function PersonSheet({ person, onClose }: { person: Person | 'new' | null; onClo
           </section>
         )}
 
-        {!isNew && p?.id !== profile?.id && (
-          <section className="fill flex items-center justify-between gap-4 rounded-[22px] p-4">
-            <div>
-              <div className="flex items-center gap-2 text-[14px] font-bold"><Power className="size-4" />Login switched {form.active ? 'on' : 'off'}</div>
-              <div className="text-2 text-[13px]">Switching it off signs them out everywhere at once. Their history is kept.</div>
+        {!isNew && p && p.role === 'sales' && (
+          <section className="fill rounded-[22px] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-[14px] font-bold"><ArrowRightLeft className="size-4" />Their work</div>
+                <div className="text-2 text-[13px]">
+                  {work ? `${count(work.open_leads)} open leads · ${count(work.deals)} open deals · ${count(work.meetings)} booked meetings` : 'Counting…'}
+                </div>
+              </div>
+              <Button size="sm" variant="glass" icon={<ArrowRightLeft className="size-4" />} disabled={!hasWork(work)} onClick={() => onHandOver(p)}>Hand over their work</Button>
             </div>
-            <Switch checked={form.active} onChange={(v) => set('active', v)} />
+          </section>
+        )}
+
+        {!isNew && p?.id !== profile?.id && (
+          <section className="fill rounded-[22px] p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-[14px] font-bold"><Power className="size-4" />Login switched {form.active ? 'on' : 'off'}</div>
+                <div className="text-2 text-[13px]">Switch it off when someone leaves: it signs them out everywhere at once. Their history, pay and stats are kept.</div>
+              </div>
+              <Switch checked={form.active} onChange={(v) => set('active', v)} />
+            </div>
+            {!form.active && p?.role === 'sales' && hasWork(work) && (
+              <p className="mt-3 rounded-2xl bg-warn/12 px-3.5 py-2.5 text-[13px] font-semibold text-warn">
+                They still have {count(work!.open_leads)} open leads, {count(work!.deals)} open deals and {count(work!.meetings)} booked meetings.
+                {p.is_active ? ' After you save, you choose who gets them.' : ' Use Hand over their work above so nothing is dropped.'}
+              </p>
+            )}
           </section>
         )}
         {!isNew && <p className="text-3 flex items-center gap-1.5 text-[12px]"><KeyRound className="size-3.5" />Passwords are never shown or stored in plain text; resetting one replaces it.</p>}

@@ -70,3 +70,22 @@ export function useImports() {
     queryFn: async () => must(await supabase.from('lead_imports').select('*').order('created_at', { ascending: false }).limit(20)) as LeadImport[],
   });
 }
+
+/** What each salesperson is holding: leads, open deals and booked meetings. */
+export interface PersonWork { id: string; leads: number; open_leads: number; deals: number; meetings: number }
+export function usePeopleWork() {
+  return useQuery({
+    queryKey: ['people-work'],
+    queryFn: async () => new Map((await rpc<PersonWork[]>('people_work')).map((w) => [w.id, w])),
+  });
+}
+export const hasWork = (w: PersonWork | undefined) => !!w && w.open_leads + w.deals + w.meetings > 0;
+
+/** Who would get what if a salesperson's work were handed to these colleagues. */
+export interface HandOverPlan {
+  from: string; clients: number; leads: number; open: number; pipeline: number; already_had: number;
+  deals: number; meetings: number; back_to_sheet: number; applied: boolean; merged?: number;
+  people: { id: string; name: string; clients: number; already_had: number; open: number; pipeline: number; deals: number; meetings: number }[];
+}
+export const handOverWork = (from: string, to: string[], apply: boolean) =>
+  rpc<HandOverPlan>('hand_over_work', { p_from: from, p_to: to, p_apply: apply });

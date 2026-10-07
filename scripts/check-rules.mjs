@@ -286,7 +286,7 @@ const faisal = await as('faisal@nuuke.test');
   const back = [];
   for (const [i, outcome] of ['not_interested', 'invalid_number', 'wrong_person'].entries()) {
     const { data: r, error } = await hamza.c.rpc('log_lead_action', { p_lead_id: hq[i].id, p_action: 'call', p_outcome: outcome });
-    back.push(!error && r.lead.stage === 'queue' && Date.parse(r.lead.next_action_at) - Date.now() > 36 * 3600e3);
+    back.push(!error && r.lead.stage === 'queue' && Date.parse(r.lead.next_action_at) - Date.now() > 24 * 3600e3);
   }
   ok(back.every(Boolean), 'Not interested, invalid number and wrong person come back in 2 days instead of closing');
   await service.from('leads').update({ attempts: 5 }).eq('id', hq[3].id);
@@ -503,7 +503,7 @@ const faisal = await as('faisal@nuuke.test');
   const { error: e5 } = await hamza.c.rpc('log_lead_action', { p_lead_id: aSpa.id, p_action: 'call', p_outcome: 'voicemail' });
   ok(!!e5, "A dialer cannot log a call on a business a teammate has");
   const { data: logged, error: e6 } = await zoya.c.rpc('log_lead_action', { p_lead_id: aSpa.id, p_action: 'call', p_outcome: 'contact_not_established' });
-  ok(!e6 && logged.lead.assigned_to === zoya.id && new Date(logged.lead.next_action_at) > new Date(Date.now() + 36 * 3600e3),
+  ok(!e6 && logged.lead.assigned_to === zoya.id && new Date(logged.lead.next_action_at) > new Date(Date.now() + 24 * 3600e3),
     'A business called stays with that dialer and comes back to them in 2 days', e6?.message);
   const { data: zSum } = await zoya.c.rpc('sheet_queue_summary', { p_sheet: sheet.id });
   ok(zSum.scheduled_later === 1 && zSum.pile === 0, 'Their sheet counts show it waiting for later', JSON.stringify(zSum));
@@ -548,6 +548,90 @@ const faisal = await as('faisal@nuuke.test');
   const { count: leftOver } = await admin.c.from('leads').select('*', { count: 'exact', head: true }).ilike('name', 'Check % spa%').neq('name', 'Check DNC spa');
   ok(gone === 4 && leftOver === 0, 'Deleting a sheet removes its businesses', `${gone} removed`);
   await service.from('leads').delete().eq('id', dnc.id);
+}
+
+// ---- handing a leaver's work to colleagues
+{
+  const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+  const bilal = await as('bilal@nuuke.test');
+  const sana = await as('sana@nuuke.test');
+  const mehak = await as('mehak@nuuke.test');
+  const day = 864e5;
+  const mk = async (row) => (await service.from('leads').insert(row).select().single()).data;
+  const repeat = await mk({ name: 'Check HO repeat', phone: '(555) 020-0001', assigned_to: bilal.id, attempts: 2, status: 'contact_not_established', next_action_at: new Date(Date.now() + day).toISOString() });
+  const shared = await mk({ name: 'Check HO shared', phone: '(555) 020-0002', assigned_to: bilal.id, attempts: 3, status: 'voicemail', connected: true });
+  const mehakCopy = await mk({ name: 'Check HO shared', phone: '555.020.0002', assigned_to: mehak.id });
+  const { data: calls } = await service.from('lead_attempts').insert([1, 2, 3].map((n) => ({ lead_id: shared.id, rep_id: bilal.id, action: 'call', outcome: 'voicemail', attempt_no: n, work_date: '2026-10-01' }))).select('id');
+  const prospect = await mk({ name: 'Check HO prospect', phone: '(555) 020-0003', assigned_to: bilal.id, stage: 'pipeline', status: 'meeting_booked', attempts: 1 });
+  const { data: deal } = await service.from('deals').insert({ owner_id: bilal.id, lead_id: prospect.id, title: 'Check HO deal', stage: 'meeting' }).select().single();
+  const { data: wonDeal } = await service.from('deals').insert({ owner_id: bilal.id, title: 'Check HO won', stage: 'won', amount_usd: 900, won_on: '2026-10-01' }).select().single();
+  const { data: meeting } = await service.from('meetings').insert({ owner_id: bilal.id, lead_id: prospect.id, deal_id: deal.id, title: 'Check HO meeting', starts_at: new Date(Date.now() + 2 * day).toISOString() }).select().single();
+  const { data: pastMeeting } = await service.from('meetings').insert({ owner_id: bilal.id, title: 'Check HO past', starts_at: new Date(Date.now() - 2 * day).toISOString(), status: 'completed' }).select().single();
+
+  // a cold sheet Bilal is on: one business called, one only handed to him
+  const { data: sheet } = await admin.c.from('lead_sheets').insert({ name: 'Check HO sheet' }).select().single();
+  await admin.c.rpc('set_sheet_members', { p_sheet: sheet.id, p_members: [bilal.id, zoya.id], p_notify: false });
+  const { data: imp } = await admin.c.rpc('start_lead_import', { p_file_name: 'ho.xlsx', p_total: 2 });
+  await admin.c.rpc('import_sheet_leads', { p_import_id: imp, p_sheet: sheet.id, p_rows: [
+    { name: 'Check HO spa called', phone: '(555) 020-0101', personal_email: null, work_email: null, details: { row: 1, priority: 'A' } },
+    { name: 'Check HO spa uncalled', phone: '(555) 020-0102', personal_email: null, work_email: null, details: { row: 2, priority: 'B' } },
+  ] });
+  const { data: spas } = await bilal.c.rpc('next_sheet_leads', { p_sheet: sheet.id, p_limit: 2 });
+  await bilal.c.rpc('log_lead_action', { p_lead_id: spas[0].id, p_action: 'call', p_outcome: 'voicemail' });
+
+  const { data: before } = await admin.c.rpc('people_work');
+  const bw = before.find((w) => w.id === bilal.id);
+  const { data: repWork } = await zoya.c.rpc('people_work');
+  ok(bw.open_leads > 0 && bw.deals >= 1 && bw.meetings >= 1 && repWork.length === 0, "The admin sees what each salesperson is holding; a rep doesn't", JSON.stringify(bw));
+
+  const { error: e1 } = await zoya.c.rpc('hand_over_work', { p_from: bilal.id, p_to: [zoya.id], p_apply: true });
+  ok(!!e1, "A rep cannot take a colleague's work", e1?.message);
+  const { error: e2 } = await admin.c.rpc('hand_over_work', { p_from: bilal.id, p_to: [bilal.id], p_apply: false });
+  ok(!!e2, 'Work cannot be handed to the same person', e2?.message);
+  const umar = await as('umar@nuuke.test');
+  const { error: e3 } = await admin.c.rpc('hand_over_work', { p_from: bilal.id, p_to: [umar.id], p_apply: false });
+  ok(!!e3, 'Work only goes to active salespeople', e3?.message);
+
+  const { data: plan, error: e4 } = await admin.c.rpc('hand_over_work', { p_from: bilal.id, p_to: [sana.id, mehak.id], p_apply: false });
+  if (e4) throw new Error(`hand_over_work preview: ${e4.message}`);
+  const { count: stillBilal } = await admin.c.from('leads').select('*', { count: 'exact', head: true }).eq('assigned_to', bilal.id);
+  const toSana = plan.people.find((x) => x.id === sana.id), toMehak = plan.people.find((x) => x.id === mehak.id);
+  ok(!plan.applied && stillBilal === bw.leads && plan.back_to_sheet === 1 && plan.leads === bw.leads - 1, 'The preview changes nothing', JSON.stringify({ ...plan, people: undefined }));
+  ok(Math.abs(toSana.clients - toMehak.clients) <= toMehak.already_had + 1 && toMehak.already_had >= 1 && plan.clients === toSana.clients + toMehak.clients,
+    'Clients are shared out evenly, and a client a colleague already has goes to them', `Sana ${toSana.clients}, Mehak ${toMehak.clients} (${toMehak.already_had} already hers)`);
+
+  const { data: done, error: e5 } = await admin.c.rpc('hand_over_work', { p_from: bilal.id, p_to: [sana.id, mehak.id], p_apply: true });
+  ok(!e5 && done.applied && done.merged >= 1, 'The admin hands the work over', e5?.message ?? `${done.clients} clients, ${done.merged} merged`);
+  const { count: left } = await admin.c.from('leads').select('*', { count: 'exact', head: true }).eq('assigned_to', bilal.id);
+  ok(left === 0, 'Nothing is left with the leaver');
+  const { data: rep2 } = await admin.c.from('leads').select('assigned_to, next_action_at, attempts, status').eq('id', repeat.id).single();
+  ok([sana.id, mehak.id].includes(rep2.assigned_to) && rep2.attempts === 2 && rep2.next_action_at === repeat.next_action_at,
+    'A lead keeps its place: same repeat date, call count and status');
+  const { data: sharedNow } = await admin.c.from('leads').select('id, assigned_to, attempts, connected').eq('client_key', mehakCopy.client_key);
+  const { data: movedCalls } = await admin.c.from('lead_attempts').select('lead_id, rep_id').in('id', calls.map((c) => c.id));
+  ok(sharedNow.length === 1 && sharedNow[0].assigned_to === mehak.id && sharedNow[0].attempts === 3 && sharedNow[0].connected
+     && movedCalls.length === 3 && movedCalls.every((a) => a.lead_id === sharedNow[0].id && a.rep_id === bilal.id),
+    'A client the colleague already had becomes one card with both histories; the calls stay in the leaver\'s name', JSON.stringify(sharedNow));
+  const { data: p2 } = await admin.c.from('leads').select('assigned_to').eq('id', prospect.id).single();
+  const { data: d2 } = await admin.c.from('deals').select('owner_id').eq('id', deal.id).single();
+  const { data: m2 } = await admin.c.from('meetings').select('owner_id').eq('id', meeting.id).single();
+  ok(d2.owner_id === p2.assigned_to && m2.owner_id === p2.assigned_to, 'The open deal and booked meeting go with their client');
+  const { data: w2 } = await admin.c.from('deals').select('owner_id').eq('id', wonDeal.id).single();
+  const { data: pm2 } = await admin.c.from('meetings').select('owner_id').eq('id', pastMeeting.id).single();
+  ok(w2.owner_id === bilal.id && pm2.owner_id === bilal.id, 'Won deals and past meetings stay in the leaver\'s name (pay and stats unchanged)');
+  const { data: calledSpa } = await admin.c.from('leads').select('assigned_to').eq('id', spas[0].id).single();
+  const { data: uncalledSpa } = await admin.c.from('leads').select('assigned_to').eq('id', spas[1].id).single();
+  const { data: members } = await admin.c.from('lead_sheet_members').select('user_id').eq('sheet_id', sheet.id);
+  const ids = members.map((m) => m.user_id);
+  ok(uncalledSpa.assigned_to === null && [sana.id, mehak.id].includes(calledSpa.assigned_to) && ids.includes(calledSpa.assigned_to) && !ids.includes(bilal.id),
+    'Cold sheet: uncalled businesses go back on the pile, called ones go to a colleague who joins the sheet, and the leaver leaves it');
+  const { data: told } = await sana.c.from('notifications').select('title').eq('kind', 'leads.handover');
+  ok(told.some((n) => /Bilal's work is now yours/.test(n.title)), 'Everyone who got something is told');
+
+  await admin.c.rpc('delete_lead_sheet', { p_sheet: sheet.id });
+  await service.from('meetings').delete().in('id', [meeting.id, pastMeeting.id]);
+  await service.from('deals').delete().in('id', [deal.id, wonDeal.id]);
+  await service.from('leads').delete().like('name', 'Check HO %');
 }
 
 // ---- clean up the clock-in so the demo starts fresh
