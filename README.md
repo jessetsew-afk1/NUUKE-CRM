@@ -42,6 +42,12 @@ agent for every person who signs in.
     - paste the call transcript
     - add the client's website, socials and notes for the technical manager
   - **Progress:** a 250-a-day progress bar, a session timer, and a celebration at target.
+  - **Cold call sheets:** reps the admin has put on a cold call sheet see a **What to dial** choice above the filters: **My leads** or the sheet, with how many cards are ready.
+    - A session on a sheet shows only that sheet's businesses, Priority A first, then B, then C, in the sheet's order. Normal dialing never shows them.
+    - Everyone on the sheet shares it. A business stays with whoever gets it first and comes back to them every 2 days, so no business is called by two people. Cards a rep was shown but didn't call go back for the others when they press **End** (or after 12 hours).
+    - The card shows the business, who to ask for, the phone, links (website, socials, map), the call hook and review pain in colour, and everything else the sheet says.
+    - **Fill in while calling:** the columns the sheet leaves for the caller (After-hours call, Lunch call, Reached owner?, numbers they're told) are on the card, with the sheet's own dropdown choices. They save as you tap.
+    - The sheet's own "How to use" notes sit under the card in place of message ideas, next to **My quick messages**.
 - **My leads:** search and filter every assigned lead; tap one to open its card iOS-style and log a call.
 - **Pipeline:** drag-and-drop Kanban (Prospect → Meeting → Proposal → Negotiation → Won/Lost) with values, likelihood, next steps and expected close dates.
 - **Meetings:** a week strip, upcoming meetings, one tap to mark held, no-show or cancelled, and **Edit** to reschedule or change anything. The technical manager is told.
@@ -92,7 +98,13 @@ agent for every person who signs in.
   - A client is matched by phone number (last ten digits, at least 7 digits), else personal email, else work email, else an identical row. Columns the sheet mixed up are read correctly: a number under *Personal email* counts as the phone, an email under *Phone* counts as the email, and digits inside an email are never a phone number.
   - 10,000 rows take about 2 seconds.
   - Then filter, bulk-assign, recycle or delete.
-  - **Remove repeats:** one click leaves each dialer one card per client, and each client with one dialer, except the dialers you mark as having the whole sheet. Call history, meetings and deals move onto the card that stays. Preview first; nothing changes until you press Remove.
+  - **Remove repeats:** one click leaves each dialer one card per client, and each client with one dialer, except the dialers you mark as having the whole sheet. Call history, meetings and deals move onto the card that stays. Preview first; nothing changes until you press Remove. Cold call sheets are left alone.
+  - **Cold call sheets:** on **Import a sheet**, choose **Cold call sheet**, drop the Excel file (any layout), and pick who can dial it.
+    - NUUKE finds the tab with the list (skipping tabs like "How to use" and "Dashboard"), works out what each column is (business, phone, email, who to ask for, priority, sheet number), and shows the first card before you upload. Any column can be changed.
+    - Columns left empty for the caller become **fill in while calling** fields, with the sheet's dropdowns. Call date, outcome, notes and next step are logged by NUUKE on every call. Formula columns are left out.
+    - The sheet's "How to use" tab becomes the notes dialers see; edit them freely.
+    - Each business is added once; repeats and anyone marked Do not call or with a meeting set are skipped. Uploading into an existing sheet adds only what it doesn't have.
+    - **Cold call sheets** (next to Import) shows each sheet's progress, who has called what, a summary of what dialers filled in, and lets you change who can dial it, edit the notes, **Download with answers** (the sheet back in its own columns, filled in) or delete it. Someone taken off a sheet hands back the businesses they hadn't finished.
 - **Meetings calendar:** every meeting the team booked, in Week, Month or List view.
   - Each meeting is coloured by the client's time zone, with the client's own time shown next to it.
   - Times can be shown in Pakistan, Eastern, Central, Mountain, Pacific or UK time.
@@ -213,6 +225,7 @@ For example:
 - `20261006000100_one_client_one_dialer.sql` brings every client back every 2 days until Do not call or a meeting, one card per client, Remove repeats, and imports without repeats.
 - `20261006000200_fast_lead_access.sql` makes lead lists, the dialer's filters and counts fast with tens of thousands of leads.
 - `20261006000300_contact_keys.sql` reads phone numbers and emails typed in the wrong column, stops short stray digits from making different people one client, and reopens anyone the old matching closed by mistake. Run it before pressing **Remove repeats**.
+- `20261007000100_cold_call_sheets.sql` adds cold call sheets: their own list for the dialers you pick, kept apart from the normal leads.
 
 ---
 
@@ -234,12 +247,15 @@ supabase/migrations/   the whole backend: tables, permissions, rules, jobs
   …20261005_quick_…    reps' quick messages; mini games (break-time rules, turns, dice)
   …20261006_one_client one client one card: 2-day repeats, Do not call/meeting for everyone, Remove repeats
   …20261006_contact_…  who a client is when the sheet's phone and email columns are mixed up
+  …20261007_cold_call… cold call sheets: who's on them, the shared pile, fill-in answers, uploads
 netlify/functions/     admin-users: create logins, reset passwords, switch access
 scripts/               seed.mjs + seed-projects.mjs (demo data), check-rules.mjs (permission tests)
 src/agent/             the agent artwork and wardrobe catalogue
 src/ui/                glass UI kit, charts, toasts
 src/shell/             sidebar, tab bar, shift clock, notifications
-src/sales/             the lead card, outcome form, message ideas (outreach.ts reads the query), quick messages, meeting calendar & prep sheet
+src/sales/             the lead card, outcome form, message ideas (outreach.ts reads the query), quick messages, meeting calendar & prep sheet,
+                       ColdCard.tsx (a cold-sheet business on the card, fill-in fields, the sheet's notes)
+src/admin/             lead import, cold call sheet import (workbook.ts reads tabs, dropdowns and formulas), Cold call sheets, Remove repeats
 src/games/             Tic-Tac-Toe, Checkers, Chess and Ludo rules, and their boards
 src/lib/               phones.ts (splitting numbers), timezones.ts (client time zones)
 src/projects/          the project page: board, sprints, calendars, files & review viewer, messages

@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  CalendarClock, Filter, Flame, Headphones, Inbox, Play, Repeat, RotateCcw, SkipForward, Sparkles, Square, Timer, X,
+  BookOpen, CalendarClock, ChevronDown, FileSpreadsheet, Filter, Flame, Headphones, Inbox, Play, Repeat, RotateCcw, SkipForward, Sparkles,
+  Square, Timer, X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/app/auth';
 import { useSettings } from '@/data/common';
 import {
   emptyFilters, fetchNextLeads, logLeadAction, outcomeMap, useFilterOptions, useOutcomes, useQueueSummary, useSalesRefresh,
   useToday, type QueueFilters,
 } from '@/data/sales';
-import type { Lead, TodayStats } from '@/lib/types';
+import { releaseSheetLeads, useMySheets } from '@/data/sheets';
+import type { Lead, MySheet, TodayStats } from '@/lib/types';
 import { Agent } from '@/agent/Agent';
 import type { Mood } from '@/agent/catalog';
 import { Button, Chip, Empty, Input, Kbd, PageHeader, Panel, ProgressBar, Ring, Skeleton } from '@/ui/kit';
@@ -18,6 +21,7 @@ import { useToast } from '@/ui/toast';
 import { LeadCard } from '@/sales/LeadCard';
 import { OutreachPanel } from '@/sales/OutreachPanel';
 import { OutcomeForm, type OutcomePayload } from '@/sales/OutcomeForm';
+import { Instructions, SheetGuide } from '@/sales/ColdCard';
 import { celebrate } from '@/lib/celebrate';
 import { addDaysISO, clock, count, firstName, greeting, localISO } from '@/lib/format';
 
@@ -59,11 +63,18 @@ function Setup({ filters, setFilters, onStart }: { filters: QueueFilters; setFil
   const { profile, agent } = useAuth();
   const today = useToday();
   const options = useFilterOptions();
+  const sheets = useMySheets();
   const summary = useQueueSummary(filters);
   const navigate = useNavigate();
   const t = today.data;
   const ready = summary.data ? summary.data.due_followups + summary.data.fresh + summary.data.skipped : 0;
-  const activeFilters = filters.services.length + filters.platforms.length + (filters.from || filters.to ? 1 : 0);
+  const sheet = sheets.data?.find((x) => x.id === filters.sheet) ?? null;
+  const activeFilters = filters.sheet ? 0 : filters.services.length + filters.platforms.length + (filters.from || filters.to ? 1 : 0);
+
+  // A sheet they've been taken off (or that was deleted) falls back to their own leads.
+  useEffect(() => {
+    if (filters.sheet && sheets.data && !sheet) setFilters({ ...filters, sheet: null });
+  }, [filters, sheets.data, sheet, setFilters]);
 
   const toggle = (key: 'services' | 'platforms', v: string) =>
     setFilters({ ...filters, [key]: filters[key].includes(v) ? filters[key].filter((x) => x !== v) : [...filters[key], v] });
@@ -111,7 +122,7 @@ function Setup({ filters, setFilters, onStart }: { filters: QueueFilters; setFil
               </div>
               <div className="mt-6 grid grid-cols-3 gap-2">
                 <QueueTile icon={<Repeat className="size-4" />} label="Follow-ups due" value={summary.data?.due_followups} color="#FF9F0A" />
-                <QueueTile icon={<Sparkles className="size-4" />} label="Fresh leads" value={summary.data?.fresh} color="#7C5CFF" />
+                <QueueTile icon={<Sparkles className="size-4" />} label={filters.sheet ? 'Not called yet' : 'Fresh leads'} value={summary.data?.fresh} color="#7C5CFF" />
                 <QueueTile icon={<SkipForward className="size-4" />} label="Skipped" value={summary.data?.skipped} color="#8E8AA0" />
               </div>
               {summary.data && summary.data.scheduled_later > 0 && (
@@ -134,7 +145,7 @@ function Setup({ filters, setFilters, onStart }: { filters: QueueFilters; setFil
               {ready === 0 && summary.data ? 'Nothing to dial' : 'Start dialing'}
             </Button>
             <div className="text-2 text-[13px]">
-              {summary.isLoading ? 'Counting cards…' : <><b className="text-[color:var(--text)]">{count(ready)}</b> cards ready{activeFilters ? ' with these filters' : ''} · <Kbd>↵</Kbd> to start</>}
+              {summary.isLoading ? 'Counting cards…' : <><b className="text-[color:var(--text)]">{count(ready)}</b> cards ready{sheet ? ` on ${sheet.name}` : activeFilters ? ' with these filters' : ''} · <Kbd>↵</Kbd> to start</>}
             </div>
           </div>
         </Panel>
@@ -148,6 +159,17 @@ function Setup({ filters, setFilters, onStart }: { filters: QueueFilters; setFil
           </div>
 
           <div className="space-y-5">
+            {(sheets.data?.length ?? 0) > 0 && (
+              <FilterBlock label="What to dial">
+                <Chip active={!filters.sheet} onClick={() => setFilters({ ...filters, sheet: null })}>My leads</Chip>
+                {sheets.data!.map((x) => (
+                  <Chip key={x.id} active={filters.sheet === x.id} count={x.ready} onClick={() => setFilters({ ...filters, sheet: x.id })}>
+                    <FileSpreadsheet className="mr-1 inline size-3.5" />{x.name}
+                  </Chip>
+                ))}
+              </FilterBlock>
+            )}
+            {sheet ? <SheetChoice sheet={sheet} /> : <>
             {options.isError && (
               <div className="flex items-center gap-3 rounded-2xl bg-warn/12 px-3.5 py-2.5 text-[13px] font-semibold text-warn">
                 <span className="flex-1">Couldn't load your filters just now.</span>
@@ -171,6 +193,7 @@ function Setup({ filters, setFilters, onStart }: { filters: QueueFilters; setFil
                 <Input type="date" value={filters.to ?? ''} onChange={(e) => setFilters({ ...filters, to: e.target.value || null })} aria-label="To" />
               </div>
             </FilterBlock>
+            </>}
           </div>
 
           <button type="button" onClick={() => navigate('/sales/leads')} className="text-2 mt-6 flex items-center gap-2 text-[13px] font-bold hover:text-[color:var(--text)]">
@@ -179,6 +202,29 @@ function Setup({ filters, setFilters, onStart }: { filters: QueueFilters; setFil
         </Panel>
       </div>
     </>
+  );
+}
+
+/** What a cold call sheet session means, and the sheet's own notes. */
+function SheetChoice({ sheet }: { sheet: MySheet }) {
+  const [open, setOpen] = useState(false);
+  const has = !!sheet.instructions?.trim();
+  return (
+    <div className="space-y-3">
+      <div className="fill rounded-[20px] p-4 text-[13px] leading-relaxed">
+        <p><b>{sheet.name}</b> is a cold call sheet: a session on it only shows its {count(sheet.total)} businesses, Priority A first.</p>
+        <p className="text-2 mt-1.5">Everyone on this sheet shares it. A business you call stays with you and comes back to you in 2 days, so nobody else calls it.</p>
+      </div>
+      {has && (
+        <div>
+          <button type="button" onClick={() => setOpen((v) => !v)} className="text-2 flex items-center gap-2 text-[13px] font-bold hover:text-[color:var(--text)]">
+            <BookOpen className="size-4" /> How to work this sheet
+            <ChevronDown className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+          </button>
+          {open && <Instructions text={sheet.instructions!} className="fill mt-3 max-h-[360px] overflow-y-auto rounded-[20px] p-4" />}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -247,7 +293,10 @@ function DialSession({
   const { agent } = useAuth();
   const toast = useToast();
   const refresh = useSalesRefresh();
+  const qc = useQueryClient();
   const outcomes = useOutcomes();
+  const sheets = useMySheets();
+  const sheet = filters.sheet ? sheets.data?.find((x) => x.id === filters.sheet) ?? null : null;
   const settings = useSettings();
   const today = useToday();
   const [deck, setDeck] = useState<Lead[] | null>(null);
@@ -270,9 +319,11 @@ function DialSession({
   // logged is never shown again in the same breath, nor the same number twice.
   const loadSeq = useRef(0);
   const recent = useRef(new Map<number, number>());
+  const held = useRef(new Set<number>());
   const load = useCallback(async (keep?: Lead) => {
     const seq = ++loadSeq.current;
     const next = await fetchNextLeads(filters, 4);
+    next.forEach((l) => held.current.add(l.id));
     if (seq !== loadSeq.current) return;
     const now = Date.now();
     const seen = new Set<string>(keep?.client_key ? [keep.client_key] : []);
@@ -292,6 +343,20 @@ function DialSession({
   };
 
   useEffect(() => { void load(); }, [load]);
+
+  // Leaving a cold sheet session (End, or going to another page) hands the cards it
+  // showed but never called back to the others.
+  const release = useCallback(() => {
+    const ids = [...held.current];
+    held.current.clear();
+    if (!filters.sheet || !ids.length) return;
+    void releaseSheetLeads(filters.sheet, ids).catch(() => {}).finally(() => {
+      void qc.invalidateQueries({ queryKey: ['queue-summary'] });
+      void qc.invalidateQueries({ queryKey: ['my-sheets'] });
+    });
+  }, [filters.sheet, qc]);
+  useEffect(() => release, [release]);
+  const end = () => { release(); onEnd(); };
 
   const flash = (m: Mood, ms = 2200) => {
     window.clearTimeout(moodTimer.current);
@@ -387,10 +452,10 @@ function DialSession({
             <SessionStat icon={<Timer className="size-3.5" />} label="Session" value={clock(elapsed)} />
             <SessionStat icon={<Headphones className="size-3.5" />} label="Done" value={String(session.done)} />
             <SessionStat icon={<Flame className="size-3.5" />} label="Per hour" value={pace ? String(pace) : '–'} />
-            <Button variant="glass" icon={<Square className="size-3.5" />} onClick={onEnd}>End</Button>
+            <Button variant="glass" icon={<Square className="size-3.5" />} onClick={end}>End</Button>
           </div>
         </div>
-        <FilterSummary filters={filters} />
+        <FilterSummary filters={filters} sheetName={sheet?.name ?? (filters.sheet ? 'Cold call sheet' : null)} />
       </Panel>
 
       {/* the deck */}
@@ -403,9 +468,11 @@ function DialSession({
         <Panel strong>
           <Empty
             art={<Agent config={agent} size={150} mood="celebrate" />}
-            title="Queue cleared!"
-            body="No more cards match these filters right now. Follow-ups and call-backs come back on their own when they are due."
-            action={<Button variant="primary" icon={<RotateCcw className="size-4" />} onClick={onEnd}>Change filters</Button>}
+            title={filters.sheet ? 'Sheet done for now!' : 'Queue cleared!'}
+            body={filters.sheet
+              ? 'Every business on this sheet has been called or is with a teammate. The ones you called come back to you in 2 days.'
+              : 'No more cards match these filters right now. Follow-ups and call-backs come back on their own when they are due.'}
+            action={<Button variant="primary" icon={<RotateCcw className="size-4" />} onClick={end}>{filters.sheet ? 'Choose something else' : 'Change filters'}</Button>}
           />
         </Panel>
       ) : (
@@ -469,7 +536,9 @@ function DialSession({
             </div>
           </Panel>
           <div className="lg:col-start-1 lg:row-start-2">
-            <OutreachPanel lead={current} />
+            {filters.sheet
+              ? <SheetGuide lead={current} sheetName={sheet?.name ?? 'Cold call sheet'} instructions={sheet?.instructions ?? null} />
+              : <OutreachPanel lead={current} />}
           </div>
         </div>
       )}
@@ -495,12 +564,12 @@ function SessionStat({ icon, label, value }: { icon: React.ReactNode; label: str
   );
 }
 
-function FilterSummary({ filters }: { filters: QueueFilters }) {
-  const parts = [
+function FilterSummary({ filters, sheetName }: { filters: QueueFilters; sheetName: string | null }) {
+  const parts = (sheetName ? [sheetName] : [
     ...filters.services,
     ...filters.platforms,
     filters.from || filters.to ? `${filters.from ?? '…'} → ${filters.to ?? '…'}` : null,
-  ].filter(Boolean) as string[];
+  ]).filter(Boolean) as string[];
   if (!parts.length) return null;
   return (
     <div className="mt-3 flex flex-wrap items-center gap-1.5">

@@ -5,14 +5,16 @@ import {
   CalendarClock, Check, ChevronDown, Copy, ExternalLink, Globe, History as HistoryIcon, Mail, MessageSquare, Pencil, Phone, PhoneCall,
   Recycle, Repeat,
 } from 'lucide-react';
-import type { Lead, LeadOutcome } from '@/lib/types';
+import type { FillField, Lead, LeadOutcome } from '@/lib/types';
 import { useLeadHistory, OUTCOME_TONE } from '@/data/sales';
+import { coldOf, fillFieldsOf, useLeadSheet } from '@/data/sheets';
 import { usePeople } from '@/data/common';
 import { contactsOf, zoomCallHref as zoomHref } from '@/lib/phones';
 import { Button, Pill, spring } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { ago, day, dateTime, friendly } from '@/lib/format';
 import { EditLeadSheet } from './EditLeadSheet';
+import { ColdBody, ColdContact, ColdPills, ColdSubline } from './ColdCard';
 
 /* ---------------------------------------------------------------- helpers */
 export async function copyText(text: string) {
@@ -108,7 +110,7 @@ function Row({ icon, children }: { icon: ReactNode; children: ReactNode }) {
 
 /* ------------------------------------------------------------------- card */
 export function LeadCard({
-  lead, outcomes, maxAttempts, showHistory = true, compact, onEdited,
+  lead, outcomes, maxAttempts, showHistory = true, compact, onEdited, fillFields,
 }: {
   lead: Lead;
   outcomes: Map<string, LeadOutcome>;
@@ -117,8 +119,13 @@ export function LeadCard({
   compact?: boolean;
   /** Shows an Edit button; called with the saved lead. */
   onEdited?: (lead: Lead) => void;
+  /** Cold call sheets: the fields to fill in (looked up from the sheet when not given). */
+  fillFields?: FillField[];
 }) {
   const [editing, setEditing] = useState(false);
+  const cold = coldOf(lead);
+  const sheet = useLeadSheet(cold && !fillFields ? lead.sheet_id : null);
+  const fields = fillFields ?? fillFieldsOf(sheet.data);
   const { phones, emails } = contactsOf(lead);
   const qa = parseQuery(lead.query);
   const label = attemptLabel(lead, maxAttempts);
@@ -132,6 +139,7 @@ export function LeadCard({
         <Pill tone={label.tone} solid>{label.text}</Pill>
         {lead.service && <Pill tone="neutral">{lead.service}</Pill>}
         {lead.platform && <Pill tone="info">{lead.platform}</Pill>}
+        {cold && <ColdPills cold={cold} />}
         {status && lead.status !== 'new' && <Pill tone={OUTCOME_TONE[status.tone] ?? 'neutral'}>{status.short_label}</Pill>}
       </div>
 
@@ -148,12 +156,13 @@ export function LeadCard({
         </div>
         <div className="text-2 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-medium">
           {lead.country && <span className="inline-flex items-center gap-1.5"><Globe className="size-3.5" />{lead.country}</span>}
-          <span className="inline-flex items-center gap-1.5"><CalendarClock className="size-3.5" />Enquired {day(lead.lead_date)}</span>
+          {cold ? <ColdSubline cold={cold} /> : <span className="inline-flex items-center gap-1.5"><CalendarClock className="size-3.5" />Enquired {day(lead.lead_date)}</span>}
           {lead.last_attempt_at && <span className="inline-flex items-center gap-1.5"><Repeat className="size-3.5" />Last call {ago(lead.last_attempt_at)}</span>}
         </div>
       </div>
 
       <div className="space-y-3">
+        {cold && <ColdContact cold={cold} />}
         {phones.length ? phones.map((p, i) => (
           <Row key={p + i} icon={<Phone className="size-4" />}>
             <span className="flex min-w-0 flex-col">
@@ -187,6 +196,11 @@ export function LeadCard({
           </Row>
         )}
       </div>
+
+      {cold && (
+        <ColdBody lead={lead} cold={cold} fillFields={fields} editable={!!onEdited}
+          onSaved={(answers) => onEdited?.({ ...lead, details: { ...cold, answers } as Lead['details'] })} />
+      )}
 
       {qa && (
         <div className="fill rounded-[22px] p-4">

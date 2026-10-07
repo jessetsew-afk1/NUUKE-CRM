@@ -28,6 +28,25 @@ export type ProjectActivity = T['project_activity']['Row'];
 export type QuickMessage = T['quick_messages']['Row'];
 export type Game = T['games']['Row'];
 export type GamePlayer = T['game_players']['Row'];
+export type LeadSheet = T['lead_sheets']['Row'];
+
+/* ------------------------------------------------------------ cold call sheets */
+/** A column the sheet leaves for the caller to fill in, with the sheet's own dropdown choices. */
+export interface FillField { label: string; options?: string[]; number?: boolean }
+/** What each column of an uploaded cold call sheet is used for. */
+export type ColumnRole = 'name' | 'phone' | 'email' | 'contact' | 'priority' | 'ref' | 'show' | 'fill' | 'logged' | 'skip';
+export interface SheetColumn { label: string; role: ColumnRole }
+/** leads.details on a cold-sheet business. */
+export interface ColdDetails {
+  contact?: string;
+  priority?: string;
+  ref?: string;
+  row?: number;
+  fields?: { label: string; value: string }[];
+  answers?: Record<string, string>;
+}
+/** A cold call sheet as a dialer on it sees it. */
+export interface MySheet { id: number; name: string; instructions: string | null; fill_fields: FillField[]; ready: number; total: number }
 
 export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';

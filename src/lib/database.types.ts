@@ -845,11 +845,86 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_sheet_members: {
+        Row: {
+          added_at: string
+          sheet_id: number
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          sheet_id: number
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          sheet_id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_sheet_members_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "lead_sheets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_sheet_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_sheets: {
+        Row: {
+          columns: Json
+          created_at: string
+          created_by: string | null
+          fill_fields: Json
+          id: number
+          instructions: string | null
+          kind: string
+          name: string
+        }
+        Insert: {
+          columns?: Json
+          created_at?: string
+          created_by?: string | null
+          fill_fields?: Json
+          id?: never
+          instructions?: string | null
+          kind?: string
+          name: string
+        }
+        Update: {
+          columns?: Json
+          created_at?: string
+          created_by?: string | null
+          fill_fields?: Json
+          id?: never
+          instructions?: string | null
+          kind?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_sheets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          claimed_at: string | null
           client_key: string | null
           closed_at: string | null
           closed_reason: string | null
@@ -857,6 +932,7 @@ export type Database = {
           country: string | null
           created_at: string
           deal_id: number | null
+          details: Json | null
           id: number
           import_id: number | null
           last_attempt_at: string | null
@@ -874,6 +950,7 @@ export type Database = {
           query: string | null
           recycle_count: number
           service: string | null
+          sheet_id: number | null
           skipped_at: string | null
           stage: string
           status: string
@@ -884,6 +961,7 @@ export type Database = {
           assigned_at?: string | null
           assigned_to?: string | null
           attempts?: number
+          claimed_at?: string | null
           client_key?: string | null
           closed_at?: string | null
           closed_reason?: string | null
@@ -891,6 +969,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           deal_id?: number | null
+          details?: Json | null
           id?: never
           import_id?: number | null
           last_attempt_at?: string | null
@@ -908,6 +987,7 @@ export type Database = {
           query?: string | null
           recycle_count?: number
           service?: string | null
+          sheet_id?: number | null
           skipped_at?: string | null
           stage?: string
           status?: string
@@ -918,6 +998,7 @@ export type Database = {
           assigned_at?: string | null
           assigned_to?: string | null
           attempts?: number
+          claimed_at?: string | null
           client_key?: string | null
           closed_at?: string | null
           closed_reason?: string | null
@@ -925,6 +1006,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           deal_id?: number | null
+          details?: Json | null
           id?: never
           import_id?: number | null
           last_attempt_at?: string | null
@@ -942,6 +1024,7 @@ export type Database = {
           query?: string | null
           recycle_count?: number
           service?: string | null
+          sheet_id?: number | null
           skipped_at?: string | null
           stage?: string
           status?: string
@@ -968,6 +1051,13 @@ export type Database = {
             columns: ["import_id"]
             isOneToOne: false
             referencedRelation: "lead_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "lead_sheets"
             referencedColumns: ["id"]
           },
         ]
@@ -2026,12 +2116,20 @@ export type Database = {
         Args: { p_stage: string }
         Returns: number
       }
+      delete_lead_sheet: {
+        Args: { p_sheet: number }
+        Returns: number
+      }
       end_break: {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
       finish_lead_import: {
         Args: { p_import_id: number }
+        Returns: Json
+      }
+      finish_sheet_import: {
+        Args: { p_import_id: number; p_sheet: number }
         Returns: Json
       }
       first_name: {
@@ -2161,6 +2259,10 @@ export type Database = {
         }
         Returns: Json
       }
+      import_sheet_leads: {
+        Args: { p_import_id: number; p_rows: Json; p_sheet: number }
+        Returns: Json
+      }
       in_game: {
         Args: { p_game: number }
         Returns: boolean
@@ -2171,6 +2273,10 @@ export type Database = {
       }
       is_project_client: {
         Args: { p_project: number }
+        Returns: boolean
+      }
+      is_sheet_member: {
+        Args: { p_sheet: number }
         Returns: boolean
       }
       is_staff: {
@@ -2248,6 +2354,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      my_lead_sheets: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       my_role: {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["app_role"]
@@ -2272,6 +2382,7 @@ export type Database = {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          claimed_at: string | null
           client_key: string | null
           closed_at: string | null
           closed_reason: string | null
@@ -2279,6 +2390,7 @@ export type Database = {
           country: string | null
           created_at: string
           deal_id: number | null
+          details: Json | null
           id: number
           import_id: number | null
           last_attempt_at: string | null
@@ -2296,6 +2408,47 @@ export type Database = {
           query: string | null
           recycle_count: number
           service: string | null
+          sheet_id: number | null
+          skipped_at: string | null
+          stage: string
+          status: string
+          updated_at: string
+          work_email: string | null
+        }[]
+      }
+      next_sheet_leads: {
+        Args: { p_limit?: number; p_sheet: number }
+        Returns: {
+          assigned_at: string | null
+          assigned_to: string | null
+          attempts: number
+          claimed_at: string | null
+          client_key: string | null
+          closed_at: string | null
+          closed_reason: string | null
+          connected: boolean
+          country: string | null
+          created_at: string
+          deal_id: number | null
+          details: Json | null
+          id: number
+          import_id: number | null
+          last_attempt_at: string | null
+          last_comment: string | null
+          lead_date: string | null
+          legacy: Json | null
+          name: string
+          next_action_at: string | null
+          personal_email: string | null
+          phone: string | null
+          phone_key: string | null
+          platform: string | null
+          post_link: string | null
+          previous_round: Json | null
+          query: string | null
+          recycle_count: number
+          service: string | null
+          sheet_id: number | null
           skipped_at: string | null
           stage: string
           status: string
@@ -2408,6 +2561,10 @@ export type Database = {
         Args: { p_period_start: string }
         Returns: number
       }
+      release_sheet_leads: {
+        Args: { p_ids?: number[]; p_sheet: number }
+        Returns: number
+      }
       reopen_resting_leads: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -2487,6 +2644,10 @@ export type Database = {
           won_usd: number
         }[]
       }
+      save_lead_answers: {
+        Args: { p_answers: Json; p_lead_id: number }
+        Returns: Json
+      }
       set_attendance_override: {
         Args: {
           p_date: string
@@ -2496,9 +2657,21 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_sheet_members: {
+        Args: { p_members: string[]; p_notify?: boolean; p_sheet: number }
+        Returns: number
+      }
       shares_project_with: {
         Args: { p_profile: string }
         Returns: boolean
+      }
+      sheet_queue_summary: {
+        Args: { p_sheet: number }
+        Returns: Json
+      }
+      sheet_rank: {
+        Args: { p_details: Json }
+        Returns: number
       }
       shift_start_at: {
         Args: { p_date: string; p_profile: string }
@@ -2550,6 +2723,7 @@ export type Database = {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          claimed_at: string | null
           client_key: string | null
           closed_at: string | null
           closed_reason: string | null
@@ -2557,6 +2731,7 @@ export type Database = {
           country: string | null
           created_at: string
           deal_id: number | null
+          details: Json | null
           id: number
           import_id: number | null
           last_attempt_at: string | null
@@ -2574,6 +2749,7 @@ export type Database = {
           query: string | null
           recycle_count: number
           service: string | null
+          sheet_id: number | null
           skipped_at: string | null
           stage: string
           status: string
@@ -2587,6 +2763,7 @@ export type Database = {
           assigned_at: string | null
           assigned_to: string | null
           attempts: number
+          claimed_at: string | null
           client_key: string | null
           closed_at: string | null
           closed_reason: string | null
@@ -2594,6 +2771,7 @@ export type Database = {
           country: string | null
           created_at: string
           deal_id: number | null
+          details: Json | null
           id: number
           import_id: number | null
           last_attempt_at: string | null
@@ -2611,6 +2789,7 @@ export type Database = {
           query: string | null
           recycle_count: number
           service: string | null
+          sheet_id: number | null
           skipped_at: string | null
           stage: string
           status: string

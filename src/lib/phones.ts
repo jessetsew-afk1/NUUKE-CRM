@@ -107,3 +107,23 @@ export function toE164(phone: string, country?: string | null) {
 
 /** Zoom Phone's click-to-call link (opens the Zoom desktop app on that one number). */
 export const zoomCallHref = (phone: string, country?: string | null) => `zoomphonecall://${encodeURIComponent(toE164(phone, country))}`;
+
+/**
+ * Who the client is, the same way the database works it out (lead_client_key): the
+ * phone number (7+ digits, never the digits inside an email, from the Phone column or
+ * else the email column), else an email wherever it was typed, else the work email,
+ * else an identical name + post link + query.
+ */
+export function clientKey(p: { phone: string | null; personal_email: string | null; work_email: string | null; name: string; post_link: string | null; query: string | null }) {
+  const digits = (v: string | null) => (v ?? '').replace(/\S+@\S+/g, '').replace(/\D/g, '');
+  const email = (v: string | null) => (v ?? '').match(/[^\s|,;<>()]+@[^\s|,;<>()]+/)?.[0]?.toLowerCase();
+  const pd = digits(p.phone);
+  if (pd.length >= 7) return `p:${pd.slice(-10)}`;
+  const ed = digits(p.personal_email);
+  if (ed.length >= 7) return `p:${ed.slice(-10)}`;
+  const e = email(p.personal_email) ?? email(p.phone);
+  if (e) return `e:${e}`;
+  const w = email(p.work_email);
+  if (w) return `w:${w}`;
+  return `n:${p.name.trim().toLowerCase()}|${(p.post_link ?? '').trim()}|${(p.query ?? '').trim().slice(0, 200)}`;
+}

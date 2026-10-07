@@ -38,8 +38,10 @@ export interface QueueFilters {
   platforms: string[];
   from: string | null;
   to: string | null;
+  /** A cold call sheet to dial instead of my leads (the other filters don't apply to it). */
+  sheet: number | null;
 }
-export const emptyFilters: QueueFilters = { services: [], platforms: [], from: null, to: null };
+export const emptyFilters: QueueFilters = { services: [], platforms: [], from: null, to: null, sheet: null };
 
 const filterArgs = (f: QueueFilters) => ({
   p_services: f.services.length ? f.services : undefined,
@@ -51,12 +53,16 @@ const filterArgs = (f: QueueFilters) => ({
 export function useQueueSummary(f: QueueFilters) {
   return useQuery({
     queryKey: ['queue-summary', f],
-    queryFn: () => rpc<QueueSummary>('queue_summary', filterArgs(f)),
+    queryFn: () => (f.sheet
+      ? rpc<QueueSummary>('sheet_queue_summary', { p_sheet: f.sheet })
+      : rpc<QueueSummary>('queue_summary', filterArgs(f))),
   });
 }
 
 export function fetchNextLeads(f: QueueFilters, limit = 3) {
-  return rpc<Lead[]>('next_leads', { ...filterArgs(f), p_limit: limit });
+  return f.sheet
+    ? rpc<Lead[]>('next_sheet_leads', { p_sheet: f.sheet, p_limit: limit })
+    : rpc<Lead[]>('next_leads', { ...filterArgs(f), p_limit: limit });
 }
 
 export function useFilterOptions() {
@@ -116,6 +122,7 @@ export function useSalesRefresh() {
   return (today?: TodayStats) => {
     if (today) qc.setQueryData(['today'], today);
     void qc.invalidateQueries({ queryKey: ['queue-summary'] });
+    void qc.invalidateQueries({ queryKey: ['my-sheets'] });
     void qc.invalidateQueries({ queryKey: ['leads'] });
     void qc.invalidateQueries({ queryKey: ['lead-history'] });
     void qc.invalidateQueries({ queryKey: ['deals'] });
