@@ -2250,6 +2250,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      hand_over_work: {
+        Args: { p_apply?: boolean; p_from: string; p_to: string[] }
+        Returns: Json
+      }
       import_leads: {
         Args: {
           p_import_id: number
@@ -2507,6 +2511,16 @@ export type Database = {
       payroll_period_start: {
         Args: { p_date: string }
         Returns: string
+      }
+      people_work: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          deals: number
+          id: string
+          leads: number
+          meetings: number
+          open_leads: number
+        }[]
       }
       players_on_break: {
         Args: Record<PropertyKey, never>

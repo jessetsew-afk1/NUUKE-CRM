@@ -111,6 +111,12 @@ agent for every person who signs in.
   - Filter by rep, technical manager or time zone. See which upcoming meetings have no technical manager yet.
 - **Projects:** create a project, choose its team and project lead, and add the client's login (or create one on the spot). Edit, mark delivered or archive it later. A **client messages** inbox shows the latest from every client.
 - **Team & access:** create logins, set role, salary in PKR, shift time and length, working days, dial and dollar targets; reset passwords; switch logins off; mark people as **technical managers**.
+  - **When a salesperson leaves:** switch their login off and press Save; NUUKE goes straight on to **Hand over their work** (also on their card any time, and a switched-off person who still has work is flagged).
+    - Pick one colleague (they get everything) or several (shared out evenly). A preview shows who gets how many clients, open leads, pipeline, deals and meetings before anything changes.
+    - Each client goes to one person. A colleague who already has that client keeps it, and the two cards become one with both call histories.
+    - Leads keep their place: call-backs, 2-day repeats, Do not call and meetings carry on. Open deals and booked meetings go with their client.
+    - Cold call sheets: businesses they hadn't called yet go back on the sheet; the rest go to the colleague, who joins that sheet.
+    - Won and lost deals, past meetings and every call they made stay in their name, so pay, stats and the leaderboard don't change. Everyone who gets work is told.
 
 **Technical managers** (any staff member the admin marks)
 - **Client meetings:** the meetings they've been put on, as a calendar and an "Up next" list.
@@ -226,6 +232,7 @@ For example:
 - `20261006000200_fast_lead_access.sql` makes lead lists, the dialer's filters and counts fast with tens of thousands of leads.
 - `20261006000300_contact_keys.sql` reads phone numbers and emails typed in the wrong column, stops short stray digits from making different people one client, and reopens anyone the old matching closed by mistake. Run it before pressing **Remove repeats**.
 - `20261007000100_cold_call_sheets.sql` adds cold call sheets: their own list for the dialers you pick, kept apart from the normal leads.
+- `20261007000200_hand_over_work.sql` hands a leaving salesperson's clients, deals and meetings to colleagues.
 
 ---
 
@@ -248,6 +255,7 @@ supabase/migrations/   the whole backend: tables, permissions, rules, jobs
   …20261006_one_client one client one card: 2-day repeats, Do not call/meeting for everyone, Remove repeats
   …20261006_contact_…  who a client is when the sheet's phone and email columns are mixed up
   …20261007_cold_call… cold call sheets: who's on them, the shared pile, fill-in answers, uploads
+  …20261007_hand_over… handing a leaver's clients, deals and meetings to colleagues
 netlify/functions/     admin-users: create logins, reset passwords, switch access
 scripts/               seed.mjs + seed-projects.mjs (demo data), check-rules.mjs (permission tests)
 src/agent/             the agent artwork and wardrobe catalogue
@@ -255,7 +263,8 @@ src/ui/                glass UI kit, charts, toasts
 src/shell/             sidebar, tab bar, shift clock, notifications
 src/sales/             the lead card, outcome form, message ideas (outreach.ts reads the query), quick messages, meeting calendar & prep sheet,
                        ColdCard.tsx (a cold-sheet business on the card, fill-in fields, the sheet's notes)
-src/admin/             lead import, cold call sheet import (workbook.ts reads tabs, dropdowns and formulas), Cold call sheets, Remove repeats
+src/admin/             lead import, cold call sheet import (workbook.ts reads tabs, dropdowns and formulas), Cold call sheets, Remove repeats,
+                       HandOver.tsx (a leaver's work to colleagues)
 src/games/             Tic-Tac-Toe, Checkers, Chess and Ludo rules, and their boards
 src/lib/               phones.ts (splitting numbers), timezones.ts (client time zones)
 src/projects/          the project page: board, sprints, calendars, files & review viewer, messages
