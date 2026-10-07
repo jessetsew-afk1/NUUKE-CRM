@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Eraser, Recycle, Search, Shuffle, Trash2, Upload, UserMinus, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eraser, PhoneOutgoing, Recycle, Search, Shuffle, Trash2, Upload, UserMinus, X } from 'lucide-react';
 import { useImports } from '@/data/admin';
 import { OUTCOME_TONE, outcomeMap, useOutcomes } from '@/data/sales';
 import { usePeople } from '@/data/common';
@@ -10,6 +10,8 @@ import { must, rpc, supabase } from '@/lib/supabase';
 import type { Lead } from '@/lib/types';
 import { ImportWizard } from '@/admin/ImportWizard';
 import { TidySheet } from '@/admin/TidySheet';
+import { ColdSheets } from '@/admin/ColdSheets';
+import { useLeadSheets } from '@/data/sheets';
 import { AgentAvatar } from '@/shell/AgentAvatar';
 import { Button, Chip, Input, PageHeader, Panel, Picker, Pill, Sheet, Skeleton } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
@@ -18,11 +20,12 @@ import { LeadCard } from '@/sales/LeadCard';
 
 interface Filter {
   q: string; service: string | null; platform: string | null; stage: string | null; assigned: string | null; import_id: string | null;
+  sheet: string | null;
 }
 const PAGE = 50;
 
 export default function AdminLeads() {
-  const [f, setF] = useState<Filter>({ q: '', service: null, platform: null, stage: null, assigned: null, import_id: null });
+  const [f, setF] = useState<Filter>({ q: '', service: null, platform: null, stage: null, assigned: null, import_id: null, sheet: null });
   const [q, setQ] = useState('');
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -30,6 +33,10 @@ export default function AdminLeads() {
   const [importing, setImporting] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [tidying, setTidying] = useState(false);
+  const [coldOpen, setColdOpen] = useState(false);
+  const [importCold, setImportCold] = useState(false);
+  const sheets = useLeadSheets();
+  const sheetName = useMemo(() => new Map((sheets.data ?? []).map((s) => [s.id, s.name])), [sheets.data]);
   const [open, setOpen] = useState<Lead | null>(null);
   const people = usePeople();
   const reps = (people.data ?? []).filter((p) => p.role === 'sales' && p.is_active);
@@ -65,9 +72,10 @@ export default function AdminLeads() {
       if (f.platform) qb = qb.eq('platform', f.platform);
       if (f.stage === 'exhausted') qb = qb.eq('closed_reason', 'exhausted');
       else if (f.stage) qb = qb.eq('stage', f.stage);
-      if (f.assigned === 'unassigned') qb = qb.is('assigned_to', null);
+      if (f.assigned === 'unassigned') qb = qb.is('assigned_to', null).is('sheet_id', null);
       else if (f.assigned) qb = qb.eq('assigned_to', f.assigned);
       if (f.import_id) qb = qb.eq('import_id', Number(f.import_id));
+      if (f.sheet) qb = qb.eq('sheet_id', Number(f.sheet));
       const res = await qb.order('lead_date', { ascending: false, nullsFirst: false }).order('id', { ascending: false }).range(page * PAGE, page * PAGE + PAGE - 1);
       return { rows: must(res) as Lead[], total: res.count ?? 0 };
     },
@@ -88,6 +96,7 @@ export default function AdminLeads() {
     if (f.stage === 'exhausted') out.stage = 'closed';
     if (f.assigned) out.assigned = f.assigned;
     if (f.import_id) out.import_id = f.import_id;
+    if (f.sheet) out.sheet = f.sheet;
     return out;
   };
   const ids = async () => (allMatching ? await rpc<number[]>('admin_lead_ids', { p_filter: rpcFilter() }) : [...selected]);
@@ -120,7 +129,8 @@ export default function AdminLeads() {
       <PageHeader title="Leads & import" sub="Upload the lead sheet, hand leads to reps, and keep the pipeline fed."
         right={<>
           <Button variant="glass" icon={<Eraser className="size-4" />} onClick={() => setTidying(true)}>Remove repeats</Button>
-          <Button variant="primary" icon={<Upload className="size-4" />} onClick={() => setImporting(true)}>Import a sheet</Button>
+          <Button variant="glass" icon={<PhoneOutgoing className="size-4" />} onClick={() => setColdOpen(true)}>Cold call sheets</Button>
+          <Button variant="primary" icon={<Upload className="size-4" />} onClick={() => { setImportCold(false); setImporting(true); }}>Import a sheet</Button>
         </>} />
 
       {imports.data && imports.data.length > 0 && (
@@ -146,6 +156,11 @@ export default function AdminLeads() {
             options={[{ value: '__all', label: 'All services' }, ...(options.data?.services ?? []).map((s) => ({ value: s, label: s }))]} />
           <Picker className="w-[160px]" align="right" value={f.platform ?? '__all'} onChange={(v) => setF({ ...f, platform: v === '__all' ? null : v })}
             options={[{ value: '__all', label: 'All platforms' }, ...(options.data?.platforms ?? []).map((s) => ({ value: s, label: s }))]} />
+          {f.sheet && (
+            <Chip active onClick={() => setF({ ...f, sheet: null })}>
+              <PhoneOutgoing className="size-3.5" />{sheetName.get(Number(f.sheet)) ?? 'Cold call sheet'}<X className="size-3.5" />
+            </Chip>
+          )}
         </div>
       </Panel>
 
@@ -192,7 +207,8 @@ export default function AdminLeads() {
                     <td className="max-w-[170px] truncate px-2 py-2.5">{l.service ?? '—'}</td>
                     <td className="px-2 py-2.5">{l.platform ?? '—'}</td>
                     <td className="tabular px-2 py-2.5">{dayShort(l.lead_date)}</td>
-                    <td className="px-2 py-2.5">{rep ? <span className="inline-flex items-center gap-1.5"><AgentAvatar who={rep} size={22} />{rep.full_name.split(' ')[0]}</span> : <span className="text-3">Unassigned</span>}</td>
+                    <td className="px-2 py-2.5">{rep ? <span className="inline-flex items-center gap-1.5"><AgentAvatar who={rep} size={22} />{rep.full_name.split(' ')[0]}</span>
+                      : <span className="text-3">{l.sheet_id ? 'Cold sheet pile' : 'Unassigned'}</span>}</td>
                     <td className="px-2 py-2.5">{l.status === 'new' ? <Pill tone="iris">New</Pill> : <Pill tone={OUTCOME_TONE[o?.tone ?? 'neutral']}>{l.closed_reason === 'exhausted' ? 'Exhausted' : o?.short_label ?? l.status}</Pill>}</td>
                     <td className="tabular px-4 py-2.5 text-right">{l.attempts}</td>
                   </tr>
@@ -226,7 +242,10 @@ export default function AdminLeads() {
       </AnimatePresence>
 
       <AssignSheet open={assigning} onClose={() => setAssigning(false)} reps={reps} count={selCount} onAssign={assign} />
-      <ImportWizard open={importing} onClose={() => setImporting(false)} reps={reps} />
+      <ImportWizard open={importing} onClose={() => setImporting(false)} reps={reps} startWith={importCold ? 'cold' : 'leads'} />
+      <ColdSheets open={coldOpen} onClose={() => setColdOpen(false)} reps={reps}
+        onImport={() => { setColdOpen(false); setImportCold(true); setImporting(true); }}
+        onShowLeads={(id) => { setColdOpen(false); setF((c) => ({ ...c, sheet: String(id) })); }} />
       <TidySheet open={tidying} onClose={() => setTidying(false)} reps={reps} />
       <Sheet open={!!open} onClose={() => setOpen(null)} width={760} title={open?.name || 'Lead'}>
         {open && <LeadCard lead={open} outcomes={omap} maxAttempts={4} compact onEdited={(l) => { setOpen(l); void qc.invalidateQueries({ queryKey: ['admin-leads'] }); }} />}

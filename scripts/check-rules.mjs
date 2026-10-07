@@ -444,6 +444,112 @@ const faisal = await as('faisal@nuuke.test');
   await hamza.c.rpc('clock_out');
 }
 
+// ---- cold call sheets
+{
+  const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+  const sana = await as('sana@nuuke.test');
+  const { error: e0 } = await zoya.c.from('lead_sheets').insert({ name: 'Sneaky sheet' });
+  ok(!!e0, 'A rep cannot create a cold call sheet', e0?.message);
+  const { data: sheet, error: e1 } = await admin.c.from('lead_sheets')
+    .insert({ name: 'Check spas', instructions: 'Ask for the owner.', fill_fields: [{ label: 'Lunch call', options: ['Answered', 'Voicemail'] }, { label: 'New patient value ($)', number: true }] })
+    .select().single();
+  ok(!e1 && sheet?.id > 0, 'The admin creates a cold call sheet', e1?.message);
+  const { error: e2 } = await zoya.c.rpc('set_sheet_members', { p_sheet: sheet.id, p_members: [zoya.id] });
+  ok(!!e2, 'A rep cannot choose who dials a sheet');
+  await admin.c.rpc('set_sheet_members', { p_sheet: sheet.id, p_members: [zoya.id, hamza.id], p_notify: true });
+
+  // a number that asked not to be called, among the normal leads
+  const { data: dnc } = await service.from('leads').insert({ name: 'Check DNC spa', phone: '(305) 555-0199', status: 'do_not_call', stage: 'closed', closed_reason: 'do_not_call' }).select().single();
+  const row = (n, name, phone, priority) => ({ name, phone, personal_email: null, work_email: null, details: { row: n, priority, contact: `Owner of ${name}`, fields: [{ label: 'Area', value: 'Doral' }] } });
+  const { data: imp } = await admin.c.rpc('start_lead_import', { p_file_name: 'check-spas.xlsx', p_total: 7 });
+  const { data: res, error: e3 } = await admin.c.rpc('import_sheet_leads', { p_import_id: imp, p_sheet: sheet.id, p_rows: [
+    row(1, 'Check C spa', '(305) 555-0101', 'C'), row(2, 'Check A spa', '(305) 555-0102', 'A'), row(3, 'Check B spa', '(305) 555-0103', 'B'),
+    row(4, 'Check A2 spa', '(305) 555-0104', 'A'), row(5, 'Check A spa again', '305.555.0102', 'A'), row(6, 'Check DNC spa', '305-555-0199', 'A'),
+    row(7, '', '', 'B'),
+  ] });
+  ok(!e3 && res.inserted === 4 && res.duplicates === 2 && res.invalid === 1, 'A cold sheet upload adds each business once, never a Do not call number, and drops blank rows', JSON.stringify(res ?? e3?.message));
+  const { data: again } = await admin.c.rpc('import_sheet_leads', { p_import_id: imp, p_sheet: sheet.id, p_rows: [row(8, 'Check A spa', '(305) 555-0102', 'A')] });
+  ok(again.inserted === 0, 'Uploading the same business to the sheet again adds nothing');
+  await admin.c.rpc('finish_sheet_import', { p_import_id: imp, p_sheet: sheet.id });
+  const { data: told } = await hamza.c.from('notifications').select('title').eq('kind', 'leads.sheet');
+  ok(told.some((n) => /4 businesses to cold call on Check spas/.test(n.title)), 'Everyone on the sheet is told it is ready', told.map((n) => n.title).join(' | '));
+
+  // who sees it
+  const { data: sanaSheets } = await sana.c.rpc('my_lead_sheets');
+  const { data: sanaRow } = await sana.c.from('lead_sheets').select('id').eq('id', sheet.id);
+  const { error: e4 } = await sana.c.rpc('next_sheet_leads', { p_sheet: sheet.id, p_limit: 3 });
+  const { error: e4b } = await sana.c.rpc('sheet_queue_summary', { p_sheet: sheet.id });
+  ok(sanaSheets.length === 0 && sanaRow.length === 0 && !!e4 && !!e4b, 'Someone not on the sheet cannot see it or dial it', e4?.message);
+  const { data: zSheets } = await zoya.c.rpc('my_lead_sheets');
+  const zs = zSheets.find((x) => x.id === sheet.id);
+  ok(zs?.ready === 4 && zs?.total === 4 && zs.instructions === 'Ask for the owner.', 'A dialer on the sheet sees it, with 4 cards ready and its notes', JSON.stringify(zs));
+  const { count: pileSeen } = await zoya.c.from('leads').select('*', { count: 'exact', head: true }).eq('sheet_id', sheet.id);
+  ok(pileSeen === 0, "The pile isn't readable directly; cards come only through the dialer");
+
+  // normal dialing leaves the sheet alone
+  const { data: before } = await zoya.c.rpc('queue_summary', {});
+  const { data: zCards } = await zoya.c.rpc('next_sheet_leads', { p_sheet: sheet.id, p_limit: 2 });
+  ok(zCards.map((l) => l.name).join(',') === 'Check A spa,Check A2 spa', 'Priority A is handed out first, in the sheet’s order', zCards.map((l) => l.name).join(','));
+  const { data: after } = await zoya.c.rpc('queue_summary', {});
+  const { data: normal } = await zoya.c.rpc('next_leads', { p_limit: 20 });
+  ok(JSON.stringify(before) === JSON.stringify(after) && normal.every((l) => !l.sheet_id), "Normal dialing never serves a cold-sheet business, and its counts don't change");
+  const { data: zOpts } = await zoya.c.rpc('lead_filter_options');
+  ok(!zOpts.platforms.some((p) => p.value === 'Cold call'), 'The normal filters leave the cold sheet out');
+
+  // one business, one dialer
+  const { data: hCards } = await hamza.c.rpc('next_sheet_leads', { p_sheet: sheet.id, p_limit: 5 });
+  ok(hCards.map((l) => l.name).join(',') === 'Check B spa,Check C spa', 'A second dialer gets only businesses nobody has', hCards.map((l) => l.name).join(','));
+  const aSpa = zCards[0];
+  const { error: e5 } = await hamza.c.rpc('log_lead_action', { p_lead_id: aSpa.id, p_action: 'call', p_outcome: 'voicemail' });
+  ok(!!e5, "A dialer cannot log a call on a business a teammate has");
+  const { data: logged, error: e6 } = await zoya.c.rpc('log_lead_action', { p_lead_id: aSpa.id, p_action: 'call', p_outcome: 'contact_not_established' });
+  ok(!e6 && logged.lead.assigned_to === zoya.id && new Date(logged.lead.next_action_at) > new Date(Date.now() + 36 * 3600e3),
+    'A business called stays with that dialer and comes back to them in 2 days', e6?.message);
+  const { data: zSum } = await zoya.c.rpc('sheet_queue_summary', { p_sheet: sheet.id });
+  ok(zSum.scheduled_later === 1 && zSum.pile === 0, 'Their sheet counts show it waiting for later', JSON.stringify(zSum));
+
+  // fill-in answers
+  const { data: ans, error: e7 } = await zoya.c.rpc('save_lead_answers', { p_lead_id: aSpa.id, p_answers: { 'Lunch call': 'Voicemail', 'New patient value ($)': '450', Sneaky: 'x' } });
+  ok(!e7 && ans['Lunch call'] === 'Voicemail' && ans['New patient value ($)'] === '450' && !('Sneaky' in ans), "Answers save to the sheet's own fields only", JSON.stringify(ans ?? e7?.message));
+  const { data: ans2 } = await zoya.c.rpc('save_lead_answers', { p_lead_id: aSpa.id, p_answers: { 'Lunch call': '' } });
+  ok(!('Lunch call' in ans2) && ans2['New patient value ($)'] === '450', 'Clearing an answer removes just that one');
+  const { error: e8 } = await hamza.c.rpc('save_lead_answers', { p_lead_id: aSpa.id, p_answers: { 'Lunch call': 'Answered' } });
+  ok(!!e8, "A dialer cannot fill in a teammate's business");
+
+  // ending a session hands back what wasn't called
+  const { data: freed } = await zoya.c.rpc('release_sheet_leads', { p_sheet: sheet.id });
+  const { data: a2 } = await admin.c.from('leads').select('assigned_to').eq('id', zCards[1].id).single();
+  const { data: a1 } = await admin.c.from('leads').select('assigned_to').eq('id', aSpa.id).single();
+  ok(freed === 1 && a2.assigned_to === null && a1.assigned_to === zoya.id, 'Ending a session puts uncalled cards back on the pile; called ones stay', `released ${freed}`);
+  const { data: hNext } = await hamza.c.rpc('next_sheet_leads', { p_sheet: sheet.id, p_limit: 5 });
+  ok(hNext[0]?.name === 'Check A2 spa' && hNext.length === 3, 'The next dialer picks it up, still Priority A first', hNext.map((l) => l.name).join(','));
+
+  // forgotten cards come back after 12 hours
+  await service.from('leads').update({ claimed_at: new Date(Date.now() - 13 * 3600e3).toISOString() }).eq('id', hNext[0].id);
+  const { data: zAgain } = await zoya.c.rpc('next_sheet_leads', { p_sheet: sheet.id, p_limit: 3 });
+  ok(zAgain.some((l) => l.id === hNext[0].id), 'A card picked up and left uncalled for 12 hours goes back on the pile');
+
+  // admin lists
+  const { data: unassignedIds } = await admin.c.rpc('admin_lead_ids', { p_filter: { assigned: 'unassigned' } });
+  const { data: sheetIds } = await admin.c.rpc('admin_lead_ids', { p_filter: { sheet: String(sheet.id) } });
+  const { data: sheetRows } = await admin.c.from('leads').select('id').eq('sheet_id', sheet.id);
+  ok(sheetIds.length === 4 && sheetRows.every((r) => !unassignedIds.includes(r.id)), '"Unassigned" leaves out the sheet\'s pile, and a sheet filter selects just its businesses');
+  const { data: tidy } = await admin.c.rpc('tidy_repeat_leads', { p_whole_sheet: [], p_apply: false });
+  const { count: zNormal } = await admin.c.from('leads').select('*', { count: 'exact', head: true }).eq('assigned_to', zoya.id).is('sheet_id', null);
+  ok(tidy.dialers.find((d) => d.dialer === 'Zoya Malik')?.leads === zNormal, 'Remove repeats works on the normal leads only');
+
+  // taking someone off
+  await admin.c.rpc('set_sheet_members', { p_sheet: sheet.id, p_members: [zoya.id] });
+  const { data: hamzaLeft } = await admin.c.from('leads').select('id').eq('sheet_id', sheet.id).eq('assigned_to', hamza.id);
+  const { error: e9 } = await hamza.c.rpc('next_sheet_leads', { p_sheet: sheet.id, p_limit: 3 });
+  ok(hamzaLeft.length === 0 && !!e9, 'Someone taken off the sheet hands back their businesses and can no longer dial it');
+
+  const { data: gone } = await admin.c.rpc('delete_lead_sheet', { p_sheet: sheet.id });
+  const { count: leftOver } = await admin.c.from('leads').select('*', { count: 'exact', head: true }).ilike('name', 'Check % spa%').neq('name', 'Check DNC spa');
+  ok(gone === 4 && leftOver === 0, 'Deleting a sheet removes its businesses', `${gone} removed`);
+  await service.from('leads').delete().eq('id', dnc.id);
+}
+
 // ---- clean up the clock-in so the demo starts fresh
 await zoya.c.rpc('clock_out');
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');

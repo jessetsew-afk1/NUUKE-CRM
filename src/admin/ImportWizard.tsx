@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
 import Papa from 'papaparse';
@@ -11,6 +11,8 @@ import { Button, Chip, Picker, ProgressBar, Segmented, Sheet, Switch } from '@/u
 import { useToast } from '@/ui/toast';
 import { celebrate } from '@/lib/celebrate';
 import { count } from '@/lib/format';
+import { clientKey } from '@/lib/phones';
+import { ColdSheetImport, ImportKind, type ImportKindValue } from './ColdSheetImport';
 
 /* ------------------------------------------------------------------ fields */
 type FieldKey =
@@ -69,29 +71,23 @@ export function parseDate(v: Cell, mode: DateMode): string | null {
 const text = (v: Cell) => (v === null || v === undefined ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).trim());
 
 /* ------------------------------------------------------------------ wizard */
-/**
- * Who the client is, the same way the database works it out (lead_client_key): the
- * phone number (7+ digits, never the digits inside an email, from the Phone column or
- * else the email column), else an email wherever it was typed, else the work email,
- * else an identical name + post link + query.
- */
-function clientKey(p: { phone: string | null; personal_email: string | null; work_email: string | null; name: string; post_link: string | null; query: string | null }) {
-  const digits = (v: string | null) => (v ?? '').replace(/\S+@\S+/g, '').replace(/\D/g, '');
-  const email = (v: string | null) => (v ?? '').match(/[^\s|,;<>()]+@[^\s|,;<>()]+/)?.[0]?.toLowerCase();
-  const pd = digits(p.phone);
-  if (pd.length >= 7) return `p:${pd.slice(-10)}`;
-  const ed = digits(p.personal_email);
-  if (ed.length >= 7) return `p:${ed.slice(-10)}`;
-  const e = email(p.personal_email) ?? email(p.phone);
-  if (e) return `e:${e}`;
-  const w = email(p.work_email);
-  if (w) return `w:${w}`;
-  return `n:${p.name.trim().toLowerCase()}|${(p.post_link ?? '').trim()}|${(p.query ?? '').trim().slice(0, 200)}`;
-}
-
 type Assign = 'none' | 'single' | 'round_robin' | 'sheet';
 
-export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: () => void; reps: Profile[] }) {
+/** Import a lead sheet, or (chosen on the first step) a cold call sheet. */
+export function ImportWizard({ open, onClose, reps, startWith = 'leads' }: {
+  open: boolean; onClose: () => void; reps: Profile[]; startWith?: ImportKindValue;
+}) {
+  const [kind, setKind] = useState<ImportKindValue>(startWith);
+  useEffect(() => { if (open) setKind(startWith); }, [open, startWith]);
+  const done = () => { setKind('leads'); onClose(); };
+  return kind === 'cold'
+    ? <ColdSheetImport open={open} onClose={done} reps={reps} kind={kind} onKind={setKind} />
+    : <LeadImport open={open} onClose={done} reps={reps} kind={kind} onKind={setKind} />;
+}
+
+function LeadImport({ open, onClose, reps, kind, onKind }: {
+  open: boolean; onClose: () => void; reps: Profile[]; kind: ImportKindValue; onKind: (k: ImportKindValue) => void;
+}) {
   const [step, setStep] = useState(0);
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState<Cell[][]>([]);
@@ -272,6 +268,7 @@ export function ImportWizard({ open, onClose, reps }: { open: boolean; onClose: 
         <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.22 }}>
           {step === 0 && (
             <div>
+              <ImportKind kind={kind} onChange={onKind} />
               <motion.div
                 onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
                 onDragLeave={() => setDrag(false)}

@@ -46,7 +46,7 @@ export default function AdminHome() {
     queryFn: async () => {
       const [total, unassigned, queue, pipeline, exhausted] = await Promise.all([
         headCount(leadsHead()),
-        headCount(leadsHead().is('assigned_to', null)),
+        headCount(leadsHead().is('assigned_to', null).is('sheet_id', null)),
         headCount(leadsHead().eq('stage', 'queue').not('assigned_to', 'is', null)),
         headCount(leadsHead().eq('stage', 'pipeline')),
         headCount(leadsHead().eq('closed_reason', 'exhausted')),
