@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import {
   addDays, addMonths, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, isToday, parseISO, startOfMonth, startOfWeek,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Diamond, Plus } from 'lucide-react';
 import { Button, IconButton, Sheet } from '@/ui/kit';
 
 export interface CalItem {
@@ -19,7 +19,16 @@ export interface CalItem {
   icon?: ReactNode;
   onClick?: () => void;
   faded?: boolean;
+  /** A gate or launch: drawn bold with a diamond. */
+  key_moment?: boolean;
+  /** Past its date and not done. */
+  late?: boolean;
+  /** A background day (a holiday, a game day): shown quietly under the rest. */
+  quiet?: boolean;
 }
+
+/** Extra paint for a day: a phase tint, a label on the phase's first day, a "Day 12" badge. */
+export interface DayDecor { tint?: string; label?: string; badge?: string }
 
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const iso = (d: Date) => format(d, 'yyyy-MM-dd');
@@ -29,16 +38,26 @@ const iso = (d: Date) => format(d, 'yyyy-MM-dd');
  * cells too small to read. Tap a day to see everything on it, or add to it.
  */
 export function MonthCalendar({
-  items, onAdd, addLabel = 'Add', legend,
-}: { items: CalItem[]; onAdd?: (day: string) => void; addLabel?: string; legend?: { label: string; color: string }[] }) {
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
+  items, onAdd, addLabel = 'Add', legend, decorate, onDay, initialMonth,
+}: {
+  items: CalItem[];
+  onAdd?: (day: string) => void;
+  addLabel?: string;
+  legend?: { label: string; color: string; shape?: 'diamond' }[];
+  decorate?: (day: string) => DayDecor | undefined;
+  /** Called instead of opening the day sheet. */
+  onDay?: (day: string) => void;
+  initialMonth?: Date;
+}) {
+  const [month, setMonth] = useState(() => startOfMonth(initialMonth ?? new Date()));
   const [dir, setDir] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
 
   const byDay = useMemo(() => {
     const m = new Map<string, CalItem[]>();
     for (const it of items) m.set(it.date, [...(m.get(it.date) ?? []), it]);
-    for (const list of m.values()) list.sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
+    // Gates first, then by time; quiet background days last.
+    for (const list of m.values()) list.sort((a, b) => Number(!!a.quiet) - Number(!!b.quiet) || Number(!!b.key_moment) - Number(!!a.key_moment) || (a.time ?? '').localeCompare(b.time ?? ''));
     return m;
   }, [items]);
 
@@ -84,29 +103,41 @@ export function MonthCalendar({
               const key = iso(d);
               const list = byDay.get(key) ?? [];
               const inMonth = isSameMonth(d, month);
+              const deco = decorate?.(key);
+              const weekend = d.getDay() === 0 || d.getDay() === 6;
               return (
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setOpen(key)}
+                  onClick={() => (onDay ? onDay(key) : setOpen(key))}
                   className={clsx(
-                    'group flex min-h-[112px] flex-col rounded-[18px] p-2 text-left transition-colors',
+                    'group relative flex min-h-[124px] min-w-0 flex-col overflow-hidden rounded-[18px] p-2 text-left transition-colors',
                     inMonth ? 'fill hover:bg-[var(--fill-2)]' : 'opacity-40',
                     isToday(d) && 'ring-2 ring-iris',
                   )}
+                  style={deco?.tint && inMonth ? { backgroundImage: `linear-gradient(180deg, ${deco.tint}${weekend ? '26' : '1a'}, transparent 70%)` } : undefined}
                 >
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className={clsx('grid size-7 place-items-center rounded-full text-[13px] font-bold', isToday(d) && 'bg-iris text-white')}>
+                  {deco?.tint && inMonth && <span className="absolute inset-x-0 top-0 h-1" style={{ background: deco.tint }} />}
+                  <div className="mb-1 flex items-center gap-1">
+                    <span className={clsx('grid size-7 shrink-0 place-items-center rounded-full text-[13px] font-bold', isToday(d) && 'bg-iris text-white')}>
                       {format(d, 'd')}
                     </span>
-                    {onAdd && <Plus className="text-3 size-4 opacity-0 transition-opacity group-hover:opacity-100" />}
+                    {deco?.badge && <span className="text-3 truncate text-[10.5px] font-bold uppercase tracking-wide">{deco.badge}</span>}
+                    <span className="flex-1" />
+                    {onAdd && <Plus className="text-3 size-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />}
                   </div>
-                  <div className="space-y-1">
+                  {deco?.label && inMonth && (
+                    <div className="mb-1 truncate text-[10.5px] font-extrabold uppercase tracking-wide" style={{ color: deco.tint }} title={deco.label}>{deco.label}</div>
+                  )}
+                  <div className="min-w-0 space-y-1">
                     {list.slice(0, 3).map((it) => (
-                      <div key={it.id} className={clsx('flex items-center gap-1.5 truncate rounded-lg px-1.5 py-0.5 text-[11.5px] font-semibold', it.faded && 'line-through opacity-60')}
-                        style={{ background: `${it.color}24`, color: 'var(--text)' }}>
-                        <span className="size-1.5 shrink-0 rounded-full" style={{ background: it.color }} />
-                        <span className="truncate">{it.title}</span>
+                      <div key={it.id}
+                        className={clsx('flex min-w-0 items-start gap-1.5 rounded-lg px-1.5 py-[3px] text-[11.5px] [&>svg]:mt-[2px] [&>span:first-child]:mt-[5px]',
+                          it.quiet ? 'text-2 font-medium italic' : 'font-semibold', it.key_moment && 'font-extrabold', it.faded && 'line-through opacity-55')}
+                        style={it.quiet ? undefined : { background: `${it.color}${it.key_moment ? '38' : '24'}`, color: 'var(--text)' }}>
+                        {it.key_moment ? <Diamond className="size-3 shrink-0" style={{ color: it.color, fill: it.color }} />
+                          : <span className={clsx('size-1.5 shrink-0 rounded-full', it.late && 'ring-2 ring-bad/40')} style={{ background: it.late ? '#FF453A' : it.color }} />}
+                        <span className={clsx('min-w-0', it.quiet ? 'truncate' : 'line-clamp-2 leading-[1.25]')}>{it.title}</span>
                       </div>
                     ))}
                     {list.length > 3 && <div className="text-3 px-1.5 text-[11px] font-bold">+{list.length - 3} more</div>}
@@ -120,7 +151,7 @@ export function MonthCalendar({
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
             {legend.map((l) => (
               <span key={l.label} className="text-2 flex items-center gap-1.5 text-[12px] font-semibold">
-                <span className="size-2.5 rounded-full" style={{ background: l.color }} />{l.label}
+                {l.shape === 'diamond' ? <Diamond className="size-3" style={{ color: l.color, fill: l.color }} /> : <span className="size-2.5 rounded-full" style={{ background: l.color }} />}{l.label}
               </span>
             ))}
           </div>
@@ -161,9 +192,9 @@ function ItemList({ items, onPicked }: { items: CalItem[]; onPicked?: () => void
           onClick={() => { onPicked?.(); it.onClick?.(); }}
           className="glass-weak flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left enabled:hover:bg-[var(--fill-2)]"
         >
-          <span className="grid size-8 shrink-0 place-items-center rounded-xl text-white" style={{ background: it.color }}>{it.icon}</span>
+          <span className={clsx('grid size-8 shrink-0 place-items-center rounded-xl text-white', it.quiet && 'opacity-60')} style={{ background: it.color }}>{it.icon}</span>
           <span className="min-w-0 flex-1">
-            <span className={clsx('block truncate text-[14px] font-bold', it.faded && 'line-through opacity-60')}>{it.title}</span>
+            <span className={clsx('block truncate text-[14px] font-bold', it.faded && 'line-through opacity-60', it.late && 'text-bad')}>{it.title}</span>
             <span className="text-3 block truncate text-[12px]">{[it.kind, it.time, it.sub].filter(Boolean).join(' · ')}</span>
           </span>
         </button>

@@ -379,3 +379,32 @@ export function useProjectRefresh() {
     void qc.invalidateQueries({ queryKey: ['pending-reviews'] });
   }, [qc]);
 }
+
+/* ===================================================================== plans */
+/** Who does a task. The team is "us" (NUUKE); the client side wears the client's name. */
+export type TaskSide = 'team' | 'client' | 'both';
+export const SIDE_COLORS: Record<TaskSide, string> = { team: '#7C5CFF', client: '#FF9A6B', both: '#30C46C' };
+export function sideMeta(side: string | null | undefined, clientName?: string | null) {
+  const s = (side === 'client' || side === 'both' ? side : 'team') as TaskSide;
+  const label = s === 'team' ? 'NUUKE' : s === 'client' ? (clientName?.trim() || 'Client') : 'Together';
+  return { key: s, label, color: SIDE_COLORS[s] };
+}
+
+/** Gates and launches: the days a plan is checked against. */
+export const isKeyMoment = (t: { labels: string[] }) => t.labels.some((l) => /^(gate|launch|milestone)$/i.test(l));
+
+/** "Day 12" counted from the project's start. */
+export function planDay(startsOn: string | null | undefined, day: string) {
+  if (!startsOn) return null;
+  const n = Math.round((Date.parse(`${day}T12:00:00Z`) - Date.parse(`${startsOn}T12:00:00Z`)) / 864e5) + 1;
+  return n >= 1 && n <= 400 ? n : null;
+}
+
+export const PHASE_COLORS = ['#7C5CFF', '#5AB8FF', '#30C46C', '#FF9A6B', '#FF6B9A', '#FFC23A', '#34D3A0', '#8E8AA0'];
+
+export const importProjectPlan = (projectId: number, plan: unknown) =>
+  rpc<{ phases: number; tasks: number; skipped: number; events: number }>('import_project_plan', { p_project: projectId, p_plan: plan as never });
+export const shiftProjectPlan = (projectId: number, from: string, days: number) =>
+  rpc<{ tasks: number; events: number; phases: number }>('shift_project_plan', { p_project: projectId, p_from: from, p_days: days });
+export const clientTaskStatus = (taskId: number, status: 'todo' | 'in_progress' | 'done') =>
+  rpc<Task>('client_task_status', { p_task: taskId, p_status: status });

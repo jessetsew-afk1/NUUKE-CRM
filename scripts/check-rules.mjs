@@ -634,6 +634,106 @@ const faisal = await as('faisal@nuuke.test');
   await service.from('leads').delete().like('name', 'Check HO %');
 }
 
+// ---- project plans on the calendar
+{
+  const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+  const ayesha = await as('ayesha@nuuke.test');
+  const leo = await as('leo@brightbrew.test');
+  const pkDay = (offset = 0) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(new Date(Date.now() + offset * 864e5));
+  const today = pkDay(0);
+  const { data: proj } = await admin.c.from('projects').insert({ name: 'Check Plan Project', client_name: 'Plancorp', status: 'active' }).select().single();
+  await admin.c.from('project_members').insert([
+    { project_id: proj.id, profile_id: faisal.id, is_lead: true },
+    { project_id: proj.id, profile_id: ayesha.id, is_lead: false },
+    { project_id: proj.id, profile_id: leo.id, is_lead: false },
+  ]);
+  await service.from('notifications').delete().in('user_id', [faisal.id, ayesha.id, leo.id]);
+
+  const plan = {
+    start: pkDay(-3), end: pkDay(20), rhythm: 'Daily rhythm: check ads.',
+    phases: [
+      { name: 'Phase 1 · Setup', goal: 'Get ready.', starts_on: pkDay(-3), ends_on: pkDay(-1) },
+      { name: 'Phase 2 · Build', goal: 'Build it.', starts_on: pkDay(0), ends_on: pkDay(9) },
+      { name: 'Phase 3 · Launch', goal: 'Launch it.', starts_on: pkDay(10), ends_on: pkDay(20) },
+    ],
+    tasks: [
+      { title: 'Plan kickoff', description: 'Walk through the plan.', deliverable: 'Signed plan', owner_label: 'Both', side: 'both', due_on: pkDay(-3), phase: 'Phase 1 · Setup', status: 'done' },
+      { title: 'Plan account access', description: 'Grant roles.', deliverable: 'Access checklist', owner_label: 'Plancorp', side: 'client', due_on: pkDay(1), phase: 'Phase 2 · Build' },
+      { title: 'Plan tracking spec', description: 'Define events.', deliverable: 'Tracking spec', owner_label: 'Nuuke', side: 'team', due_on: pkDay(1), phase: 'Phase 2 · Build' },
+      { title: 'Plan gate', description: 'Review.', deliverable: 'Go', owner_label: 'Both', side: 'both', due_on: pkDay(9), phase: 'Phase 2 · Build', labels: ['Gate'], priority: 'high' },
+      { title: 'Plan launch', description: 'Go live.', deliverable: 'App live', owner_label: 'Both', side: 'both', due_on: pkDay(12), phase: 'Phase 3 · Launch', labels: ['Launch'] },
+    ],
+    events: [{ title: 'Plan holiday', kind: 'other', starts_on: pkDay(5), ends_on: pkDay(7) }],
+  };
+  const { error: e1 } = await zoya.c.rpc('import_project_plan', { p_project: proj.id, p_plan: plan });
+  ok(!!e1, "Someone who isn't on the project can't import a plan into it", e1?.message);
+  const { data: actBefore } = await admin.c.from('project_activity').select('id').eq('project_id', proj.id);
+  const { data: res, error: e2 } = await ayesha.c.rpc('import_project_plan', { p_project: proj.id, p_plan: plan });
+  ok(!e2 && res.tasks === 5 && res.phases === 3 && res.events === 1, 'The team imports a plan: phases, tasks and calendar days', JSON.stringify(res ?? e2?.message));
+  const { data: again } = await ayesha.c.rpc('import_project_plan', { p_project: proj.id, p_plan: plan });
+  ok(again.tasks === 0 && again.skipped === 5 && again.phases === 0 && again.events === 0, 'Importing the same plan again adds nothing');
+  const { data: actAfter } = await admin.c.from('project_activity').select('id').eq('project_id', proj.id);
+  const { data: leadNotes } = await faisal.c.from('notifications').select('kind, title').in('kind', ['task_assigned', 'project_plan']);
+  ok(actAfter.length - actBefore.length === 1 && leadNotes.length === 1 && leadNotes[0].kind === 'project_plan',
+    'A plan import is announced once, not once per task', `${actAfter.length - actBefore.length} activity, ${leadNotes.length} alerts`);
+  const { data: leoNotes } = await leo.c.from('notifications').select('title').eq('kind', 'project_plan');
+  ok(leoNotes.length === 1, 'The client is told their plan is on the calendar');
+  const { data: phases } = await admin.c.from('sprints').select('name, status').eq('project_id', proj.id).order('starts_on');
+  ok(phases.map((p) => p.status).join() === 'planned,active,planned', 'The phase that covers today starts by itself', phases.map((p) => p.status).join());
+  const { data: tasks } = await admin.c.from('tasks').select('*').eq('project_id', proj.id).order('due_on');
+  const access = tasks.find((t) => t.title === 'Plan account access');
+  const spec = tasks.find((t) => t.title === 'Plan tracking spec');
+  ok(access.side === 'client' && access.deliverable === 'Access checklist' && access.owner_label === 'Plancorp' && access.sprint_id && tasks[0].status === 'done',
+    'Each task keeps who does it, its deliverable and its phase, and lands on the board');
+  const { data: p2 } = await admin.c.from('projects').select('starts_on, due_on, description').eq('id', proj.id).single();
+  ok(p2.starts_on === plan.start && p2.due_on === plan.end && /Daily rhythm/.test(p2.description), 'The project takes the plan\'s start, end and daily rhythm');
+
+  // the client ticks off their own tasks, not ours
+  const { data: leoTasks } = await leo.c.from('tasks').select('id').eq('project_id', proj.id);
+  const { error: e3 } = await leo.c.rpc('client_task_status', { p_task: spec.id, p_status: 'done' });
+  const { data: marked, error: e4 } = await leo.c.rpc('client_task_status', { p_task: access.id, p_status: 'in_progress' });
+  const { error: e5 } = await zoya.c.rpc('client_task_status', { p_task: access.id, p_status: 'done' });
+  const { data: told } = await faisal.c.from('notifications').select('title').eq('kind', 'client_task');
+  ok(leoTasks.length === 5 && !!e3 && !e4 && marked.status === 'in_progress' && !!e5 && told.some((n) => /started: Plan account access/.test(n.title)),
+    'The client sees the plan and can mark their own tasks started or done (the team is told), but not ours', e4?.message);
+
+  // reminders: the day before, to the person on it or the lead; the client for theirs
+  await ayesha.c.from('tasks').update({ assignee_id: ayesha.id }).eq('id', spec.id);
+  await service.from('notifications').delete().in('user_id', [faisal.id, ayesha.id, leo.id]);
+  await service.rpc('project_sweep');
+  await service.rpc('project_sweep');
+  const mine = async (who) => (await who.c.from('notifications').select('title').eq('kind', 'task_due')).data.map((n) => n.title);
+  const [fa, ay, le] = [await mine(faisal), await mine(ayesha), await mine(leo)];
+  ok(ay.includes('Tomorrow: Plan tracking spec') && !fa.includes('Tomorrow: Plan tracking spec'), 'The person on a task hears the day before');
+  ok(fa.filter((t) => t === 'Tomorrow: Plan account access').length === 1, 'With nobody on it, the project lead hears instead (once, however often the sweep runs)', fa.join(' | '));
+  ok(le.includes('Tomorrow: Plan account access') && !le.some((t) => /tracking spec/.test(t)), "The client hears about their own tasks, not ours", le.join(' | '));
+
+  // new dated task with nobody on it: the lead hears
+  await ayesha.c.from('tasks').insert({ project_id: proj.id, title: 'Plan extra task', due_on: pkDay(4) });
+  const { data: onCal } = await faisal.c.from('notifications').select('title').eq('kind', 'task_assigned');
+  ok(onCal.some((n) => n.title === 'On the calendar: Plan extra task'), 'A new task on the calendar with nobody on it alerts the project lead');
+
+  // move dates
+  const { error: e6 } = await leo.c.rpc('shift_project_plan', { p_project: proj.id, p_from: pkDay(5), p_days: 3 });
+  const { data: moved, error: e7 } = await ayesha.c.rpc('shift_project_plan', { p_project: proj.id, p_from: pkDay(5), p_days: 3 });
+  const { data: after } = await admin.c.from('tasks').select('title, due_on').eq('project_id', proj.id);
+  const { data: ph3 } = await admin.c.from('sprints').select('starts_on, ends_on').eq('project_id', proj.id).eq('name', 'Phase 3 · Launch').single();
+  ok(!!e6 && !e7 && moved.tasks === 2 && after.find((t) => t.title === 'Plan launch').due_on === pkDay(15) && after.find((t) => t.title === 'Plan tracking spec').due_on === pkDay(1)
+     && ph3.starts_on === pkDay(13) && moved.events === 1, 'Move dates shifts everything from a day onward (tasks, phases, calendar days); the client can\'t', JSON.stringify(moved ?? e7?.message));
+
+  // phases move on: an ended phase hands its unfinished tasks to the one that has started
+  await service.from('sprints').update({ status: 'done' }).eq('project_id', proj.id).eq('status', 'active');
+  await service.from('sprints').update({ status: 'active' }).eq('project_id', proj.id).eq('name', 'Phase 1 · Setup');
+  await service.from('tasks').update({ status: 'todo' }).eq('project_id', proj.id).eq('title', 'Plan kickoff');
+  await service.from('sprints').update({ status: 'planned' }).eq('project_id', proj.id).eq('name', 'Phase 2 · Build');
+  await service.rpc('project_sweep');
+  const { data: ph } = await admin.c.from('sprints').select('id, name, status').eq('project_id', proj.id).order('starts_on');
+  const { data: kick } = await admin.c.from('tasks').select('sprint_id').eq('project_id', proj.id).eq('title', 'Plan kickoff').single();
+  ok(ph[0].status === 'done' && ph[1].status === 'active' && kick.sprint_id === ph[1].id, 'An ended phase finishes, the next starts, and unfinished tasks carry over', ph.map((x) => x.status).join());
+
+  await admin.c.from('projects').delete().eq('id', proj.id);
+}
+
 // ---- clean up the clock-in so the demo starts fresh
 await zoya.c.rpc('clock_out');
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');
