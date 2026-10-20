@@ -1,15 +1,13 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { CalendarCheck, Flag, Megaphone, Rocket, SquareCheck, Users } from 'lucide-react';
-import {
-  EVENT_KINDS, eventKindMeta, platformMeta, useEvents, usePosts, useProjectRefresh, useSprints, useTasks, type ProjectWithTeam,
-} from '@/data/projects';
+import { EVENT_KINDS, eventKindMeta, platformMeta, useProjectRefresh, type ProjectWithTeam } from '@/data/projects';
 import { must, supabase } from '@/lib/supabase';
 import type { ContentPost, ProjectEvent, Sprint } from '@/lib/types';
-import { Button, Input, Panel, Picker, Pill, Sheet, Switch, Textarea } from '@/ui/kit';
+import { Button, Input, Picker, Pill, Sheet, Switch, Textarea } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { friendly, localISO, time, toLocalInput } from '@/lib/format';
-import { MonthCalendar, type CalItem } from './MonthCalendar';
+import type { CalItem } from './MonthCalendar';
+import { format, parseISO } from 'date-fns';
 
 const browserDay = (ts: string) => localISO(new Date(ts), Intl.DateTimeFormat().resolvedOptions().timeZone);
 
@@ -32,7 +30,7 @@ export function calendarItems({
   const items: CalItem[] = [];
   for (const e of events) {
     const k = eventKindMeta(e.kind);
-    items.push({ id: `e${e.id}`, date: browserDay(e.starts_at), title: e.title, color: k.color, kind: k.label, time: time(e.starts_at),
+    items.push({ id: `e${e.id}`, date: e.all_day ? e.starts_at.slice(0, 10) : browserDay(e.starts_at), title: e.title, color: k.color, kind: k.label, time: e.all_day ? null : time(e.starts_at),
       sub: projectName?.(e.project_id), icon: e.kind === 'meeting' ? <Users className="size-4" /> : <Flag className="size-4" />, onClick: () => onEvent(e) });
   }
   for (const t of tasks) {
@@ -53,35 +51,11 @@ export function calendarItems({
   return items;
 }
 
-export function ProjectCalendar({ project, canEdit }: { project: ProjectWithTeam; canEdit: boolean }) {
-  const tasks = useTasks(project.id);
-  const events = useEvents(project.id);
-  const posts = usePosts(project.id);
-  const sprints = useSprints(project.id);
-  const navigate = useNavigate();
-  const [event, setEvent] = useState<ProjectEvent | { new: true; day: string } | null>(null);
-
-  const items = calendarItems({
-    tasks: tasks.data ?? [], events: events.data ?? [], posts: posts.data ?? [], sprints: sprints.data ?? [],
-    onTask: (t) => navigate(`/projects/${project.id}/board?task=${t.id}`),
-    onEvent: (e) => setEvent(e),
-    onPost: () => navigate(`/projects/${project.id}/content`),
-    onSprint: () => navigate(`/projects/${project.id}/sprints`),
-  });
-
-  return (
-    <Panel className="!p-5">
-      <MonthCalendar items={items} legend={CAL_LEGEND} onAdd={canEdit ? (day) => setEvent({ new: true, day }) : undefined} addLabel="Add a meeting or milestone" />
-      <EventSheet event={event} project={project} canEdit={canEdit} onClose={() => setEvent(null)} />
-    </Panel>
-  );
-}
-
 export function EventSheet({ event, project, canEdit, onClose }: {
   event: ProjectEvent | { new: true; day: string } | null; project: ProjectWithTeam; canEdit: boolean; onClose: () => void;
 }) {
   const e = event && !('new' in event) ? event : null;
-  const [form, setForm] = useState({ title: '', kind: 'meeting', starts_at: '', ends_at: '', location: '', notes: '', client_visible: true });
+  const [form, setForm] = useState({ title: '', kind: 'meeting', starts_at: '', ends_at: '', location: '', notes: '', client_visible: true, all_day: false });
   const [key, setKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const refresh = useProjectRefresh();
@@ -90,11 +64,14 @@ export function EventSheet({ event, project, canEdit, onClose }: {
   if (k !== key) {
     setKey(k);
     if (e) {
-      setForm({ title: e.title, kind: e.kind, starts_at: toLocalInput(new Date(e.starts_at)), ends_at: e.ends_at ? toLocalInput(new Date(e.ends_at)) : '',
-        location: e.location ?? '', notes: e.notes ?? '', client_visible: e.client_visible });
+      setForm(e.all_day
+        ? { title: e.title, kind: e.kind, starts_at: e.starts_at.slice(0, 10), ends_at: e.ends_at ? e.ends_at.slice(0, 10) : '',
+            location: e.location ?? '', notes: e.notes ?? '', client_visible: e.client_visible, all_day: true }
+        : { title: e.title, kind: e.kind, starts_at: toLocalInput(new Date(e.starts_at)), ends_at: e.ends_at ? toLocalInput(new Date(e.ends_at)) : '',
+            location: e.location ?? '', notes: e.notes ?? '', client_visible: e.client_visible, all_day: false });
     } else if (event) {
       const day = (event as { day: string }).day;
-      setForm({ title: '', kind: 'meeting', starts_at: `${day}T15:00`, ends_at: `${day}T15:30`, location: '', notes: '', client_visible: true });
+      setForm({ title: '', kind: 'meeting', starts_at: `${day}T15:00`, ends_at: `${day}T15:30`, location: '', notes: '', client_visible: true, all_day: false });
     }
   }
 
@@ -102,10 +79,12 @@ export function EventSheet({ event, project, canEdit, onClose }: {
     if (!form.title.trim()) { toast({ title: 'Give it a name', tone: 'warning' }); return; }
     setBusy(true);
     try {
+      // All-day: the date at 12:00 UTC, so it lands on the same day in every time zone.
+      const at = (v: string) => (form.all_day ? `${v.slice(0, 10)}T12:00:00Z` : new Date(v).toISOString());
       const row = {
-        title: form.title.trim(), kind: form.kind, starts_at: new Date(form.starts_at).toISOString(),
-        ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null, location: form.location.trim() || null,
-        notes: form.notes.trim() || null, client_visible: form.client_visible,
+        title: form.title.trim(), kind: form.kind, starts_at: at(form.starts_at),
+        ends_at: form.ends_at ? at(form.ends_at) : null, location: form.location.trim() || null,
+        notes: form.notes.trim() || null, client_visible: form.client_visible, all_day: form.all_day,
       };
       if (e) must(await supabase.from('project_events').update(row).eq('id', e.id).select());
       else must(await supabase.from('project_events').insert({ ...row, project_id: project.id }).select());
@@ -128,7 +107,9 @@ export function EventSheet({ event, project, canEdit, onClose }: {
       <Sheet open onClose={onClose} title={e.title} width={460}>
         <div className="space-y-3 text-[14px]">
           <Pill tone="info"><span style={{ color: k2.color }}>{k2.label}</span></Pill>
-          <div className="font-semibold">{friendly(e.starts_at)}{e.ends_at && ` – ${time(e.ends_at)}`}</div>
+          <div className="font-semibold">{e.all_day
+            ? `${format(parseISO(e.starts_at.slice(0, 10)), 'EEE d MMM')}${e.ends_at ? ` – ${format(parseISO(e.ends_at.slice(0, 10)), 'EEE d MMM')}` : ''}`
+            : <>{friendly(e.starts_at)}{e.ends_at && ` – ${time(e.ends_at)}`}</>}</div>
           {e.location && (/^https?:/.test(e.location)
             ? <Button variant="primary" onClick={() => window.open(e.location!, '_blank', 'noopener')}>Join</Button>
             : <div className="text-2">{e.location}</div>)}
@@ -149,8 +130,12 @@ export function EventSheet({ event, project, canEdit, onClose }: {
         <Input className="sm:col-span-2" label="What" autoFocus={!e} value={form.title} onChange={(x) => setForm({ ...form, title: x.target.value })} placeholder="e.g. Design review call" />
         <Picker label="Kind" value={form.kind} onChange={(v) => setForm({ ...form, kind: v })} options={EVENT_KINDS.map((x) => ({ value: x.key, label: x.label, dot: x.color }))} />
         <Input label="Where / link" value={form.location} onChange={(x) => setForm({ ...form, location: x.target.value })} placeholder="Zoom or Meet link" />
-        <Input label="Starts" type="datetime-local" value={form.starts_at} onChange={(x) => setForm({ ...form, starts_at: x.target.value })} />
-        <Input label="Ends" type="datetime-local" value={form.ends_at} onChange={(x) => setForm({ ...form, ends_at: x.target.value })} />
+        <Input label="Starts" type={form.all_day ? 'date' : 'datetime-local'} value={form.starts_at} onChange={(x) => setForm({ ...form, starts_at: x.target.value })} />
+        <Input label="Ends" type={form.all_day ? 'date' : 'datetime-local'} value={form.ends_at} onChange={(x) => setForm({ ...form, ends_at: x.target.value })} />
+        <div className="sm:col-span-2">
+          <Switch checked={form.all_day} label="All day (a date, no time)"
+            onChange={(v) => setForm({ ...form, all_day: v, starts_at: v ? form.starts_at.slice(0, 10) : `${form.starts_at.slice(0, 10)}T15:00`, ends_at: v ? form.ends_at.slice(0, 10) : '' })} />
+        </div>
         <Textarea className="sm:col-span-2" label="Notes" rows={2} value={form.notes} onChange={(x) => setForm({ ...form, notes: x.target.value })} />
         <div className="sm:col-span-2"><Switch checked={form.client_visible} onChange={(v) => setForm({ ...form, client_visible: v })} label="On the client's calendar too" /></div>
       </div>

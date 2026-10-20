@@ -13,7 +13,7 @@ import { Button, Empty, Panel, Picker, Pill, Skeleton, spring } from '@/ui/kit';
 import { dayShort } from '@/lib/format';
 import { ProjectMark, ReviewDot } from './bits';
 import { Board } from './Board';
-import { ProjectCalendar } from './Calendar';
+import { ProjectCalendar } from './PlanCalendar';
 import { Content } from './Content';
 import { Files } from './Files';
 import { Messages } from './Messages';

@@ -68,9 +68,17 @@ agent for every person who signs in.
 - **My workspace:** today's tasks (overdue, today, this week) with tick-to-finish, team progress for the week, what's coming up, and every project they're on. Nobody sees a project they haven't been added to.
 - **Each project has:**
   - **Board:** a drag-and-drop Kanban (Backlog → To do → In progress → In review → Done), or a Monday-style **table** with colour status cells. Filter by sprint, person or search; quick-add right in a column.
-  - **Tasks:** owner, priority, due date, labels, sprint, comments, and an **internal** switch to hide a task from the client.
+  - **Tasks:** owner, priority, due date, labels, sprint, comments, and an **internal** switch to hide a task from the client. Each task also says **what it involves**, its **deliverable** (what shows it's done) and **who does it**: NUUKE, the client, or both (with the owner as the plan words it). Board cards show the client's name when it's theirs, and a diamond on gates.
   - **Sprints:** plan, start and finish sprints, with a live burndown. Unfinished work rolls into the next sprint or the backlog.
-  - **Calendar:** meetings, milestones, deadlines and launches, plus task due dates and sprint starts and ends.
+  - **Calendar:** the project's plan in one place, for the team and the client alike. Every dated task is on it and on the board at the same time.
+    - **At the top:** the phase you're in (its goal, days and progress), the next gate and how far away it is, and four counts: late, next 7 days, waiting on the client, done. Tap a count to see just those.
+    - **Month:** days tinted by phase, "Day 12" on each day of the plan, colours for who does what (NUUKE purple, the client orange, together green), diamonds for gates and the launch, late tasks in red, campus days and holidays quietly underneath.
+    - **Plan:** the whole plan as a list by phase and week, each task with its deliverable, owner, status and who's on it. It opens at today.
+    - Filter by NUUKE, the client or **Mine**; hide what's done. Tap any task to open it right there.
+    - **Phases** are sprints: the one whose dates have come starts by itself, and an ended phase hands its unfinished tasks to the next.
+    - **Alerts:** whoever is on a task, or the project lead while nobody is, hears the day before, on the day and the first day it's late. A new task on the calendar with nobody on it alerts the lead. The client hears about their own tasks the same way.
+    - **Import a plan:** drop a NUUKE plan file or a sheet with Day (or Date), Task, What it involves, Owner, Deliverable and Phase columns, pick Day 1, check the preview, and every task lands on the calendar and the board in its phase. One alert for the team and one for the client, not one per task. Importing again adds only what's missing.
+    - **Move dates:** when the start or the launch moves, shift everything from a day onward by however many days; everyone is told.
   - **Content calendar:** social posts for every platform, moved from idea → drafting → ready → scheduled → posted, with the creative attached.
   - **Files:** upload wireframes, designs, documents and videos (up to 50 MB), or add Figma, Google Docs, YouTube or Loom links that play inside NUUKE. Upload new versions; send any file to the client for review.
   - **Team** and **Messages** with the client.
@@ -82,6 +90,7 @@ agent for every person who signs in.
   - **Pinned comments:** they click anywhere on a design to pin a comment.
   - **Decision:** they **Approve** or **Ask for changes**, and the team is told instantly. Reminders go out if it waits more than two days.
 - They see the team, progress, sprints, the board, both calendars and a live activity feed, but only what the team has marked as visible to them.
+- On the calendar, tasks that are theirs show their name; they open each one to see what it involves and what it delivers, and mark their own tasks **Started** or **Done** (the team is told).
 - **Messages** go straight to the team, and admins are alerted.
 
 **Everyone on staff**
@@ -233,6 +242,7 @@ For example:
 - `20261006000300_contact_keys.sql` reads phone numbers and emails typed in the wrong column, stops short stray digits from making different people one client, and reopens anyone the old matching closed by mistake. Run it before pressing **Remove repeats**.
 - `20261007000100_cold_call_sheets.sql` adds cold call sheets: their own list for the dialers you pick, kept apart from the normal leads.
 - `20261007000200_hand_over_work.sql` hands a leaving salesperson's clients, deals and meetings to colleagues.
+- `20261020000100_project_plans.sql` adds project plans on the calendar: who does each task and its deliverable, Import a plan, Move dates, day-before reminders and phases that move on by themselves.
 
 ---
 
@@ -256,6 +266,7 @@ supabase/migrations/   the whole backend: tables, permissions, rules, jobs
   …20261006_contact_…  who a client is when the sheet's phone and email columns are mixed up
   …20261007_cold_call… cold call sheets: who's on them, the shared pile, fill-in answers, uploads
   …20261007_hand_over… handing a leaver's clients, deals and meetings to colleagues
+  …20261020_project_p… plans on the project calendar: owners, deliverables, import, move dates, reminders, phases
 netlify/functions/     admin-users: create logins, reset passwords, switch access
 scripts/               seed.mjs + seed-projects.mjs (demo data), check-rules.mjs (permission tests)
 src/agent/             the agent artwork and wardrobe catalogue
@@ -267,6 +278,7 @@ src/admin/             lead import, cold call sheet import (workbook.ts reads ta
                        HandOver.tsx (a leaver's work to colleagues)
 src/games/             Tic-Tac-Toe, Checkers, Chess and Ludo rules, and their boards
 src/lib/               phones.ts (splitting numbers), timezones.ts (client time zones)
-src/projects/          the project page: board, sprints, calendars, files & review viewer, messages
+src/projects/          the project page: board, sprints, calendars (PlanCalendar.tsx, PlanTools.tsx: import a plan, move dates),
+                       files & review viewer, messages
 src/pages/             sales/, admin/, work/ (production), portal/ (clients), me/ and shared pages
 ```

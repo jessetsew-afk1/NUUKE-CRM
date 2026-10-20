@@ -1370,6 +1370,7 @@ export type Database = {
       }
       project_events: {
         Row: {
+          all_day: boolean
           client_visible: boolean
           created_at: string
           created_by: string | null
@@ -1383,6 +1384,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          all_day?: boolean
           client_visible?: boolean
           created_at?: string
           created_by?: string | null
@@ -1396,6 +1398,7 @@ export type Database = {
           title: string
         }
         Update: {
+          all_day?: boolean
           client_visible?: boolean
           created_at?: string
           created_by?: string | null
@@ -1901,14 +1904,17 @@ export type Database = {
           completed_at: string | null
           created_at: string
           created_by: string | null
+          deliverable: string | null
           description: string | null
           due_on: string | null
           id: number
           labels: string[]
+          owner_label: string | null
           position: number
           priority: string
           project_id: number
           reminded_on: string | null
+          side: string
           sprint_id: number | null
           status: string
           title: string
@@ -1920,14 +1926,17 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          deliverable?: string | null
           description?: string | null
           due_on?: string | null
           id?: never
           labels?: string[]
+          owner_label?: string | null
           position?: number
           priority?: string
           project_id: number
           reminded_on?: string | null
+          side?: string
           sprint_id?: number | null
           status?: string
           title: string
@@ -1939,14 +1948,17 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          deliverable?: string | null
           description?: string | null
           due_on?: string | null
           id?: never
           labels?: string[]
+          owner_label?: string | null
           position?: number
           priority?: string
           project_id?: number
           reminded_on?: string | null
+          side?: string
           sprint_id?: number | null
           status?: string
           title?: string
@@ -2083,6 +2095,31 @@ export type Database = {
       classify_arrival: {
         Args: { p_late_minutes: number }
         Returns: string
+      }
+      client_task_status: {
+        Args: { p_status: string; p_task: number }
+        Returns: {
+          assignee_id: string | null
+          client_visible: boolean
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          deliverable: string | null
+          description: string | null
+          due_on: string | null
+          id: number
+          labels: string[]
+          owner_label: string | null
+          position: number
+          priority: string
+          project_id: number
+          reminded_on: string | null
+          side: string
+          sprint_id: number | null
+          status: string
+          title: string
+          updated_at: string
+        }
       }
       clock_in: {
         Args: Record<PropertyKey, never>
@@ -2261,6 +2298,10 @@ export type Database = {
           p_skip_duplicates?: boolean
           p_skip_owned?: boolean
         }
+        Returns: Json
+      }
+      import_project_plan: {
+        Args: { p_plan: Json; p_project: number }
         Returns: Json
       }
       import_sheet_leads: {
@@ -2686,6 +2727,10 @@ export type Database = {
       sheet_rank: {
         Args: { p_details: Json }
         Returns: number
+      }
+      shift_project_plan: {
+        Args: { p_days: number; p_from: string; p_project: number }
+        Returns: Json
       }
       shift_start_at: {
         Args: { p_date: string; p_profile: string }

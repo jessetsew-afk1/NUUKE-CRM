@@ -1,23 +1,32 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
-import { Eye, EyeOff, Send, Trash2 } from 'lucide-react';
+import { CalendarDays, Check, Diamond, Eye, EyeOff, Package, Play, RotateCcw, Send, Trash2, Users } from 'lucide-react';
 import { useAuth } from '@/app/auth';
 import {
-  PRIORITIES, TASK_STATUSES, priorityMeta, statusMeta, teamOf, useProjectRefresh, useTaskComments, type ProjectWithTeam,
+  PRIORITIES, TASK_STATUSES, clientTaskStatus, isKeyMoment, planDay, priorityMeta, sideMeta, statusMeta, teamOf, useProjectRefresh,
+  useTaskComments, type ProjectWithTeam, type TaskSide,
 } from '@/data/projects';
 import { must, supabase } from '@/lib/supabase';
 import type { Sprint, Task, TaskStatus } from '@/lib/types';
 import { AgentAvatar } from '@/shell/AgentAvatar';
-import { Button, Input, Picker, Pill, Sheet, Switch, Textarea } from '@/ui/kit';
+import { Button, Input, Picker, Pill, Segmented, Sheet, Switch, Textarea } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { celebrate } from '@/lib/celebrate';
-import { ago, day } from '@/lib/format';
+import { ago, day, localISO } from '@/lib/format';
+import { format, parseISO } from 'date-fns';
 import { usePeopleMap } from './bits';
 
 interface Form {
   title: string; description: string; status: TaskStatus; priority: string; assignee_id: string; sprint_id: string;
-  due_on: string; labels: string; client_visible: boolean;
+  due_on: string; labels: string; client_visible: boolean; side: TaskSide; owner_label: string; deliverable: string;
+}
+
+/** "Mon 26 Oct · Day 1 · Phase 1 · Setup" */
+function whenLine(t: { due_on: string | null; sprint_id: number | null }, project: ProjectWithTeam, sprints: Sprint[]) {
+  if (!t.due_on) return null;
+  const n = planDay(project.starts_on, t.due_on);
+  return [format(parseISO(t.due_on), 'EEE d MMM'), n ? `Day ${n}` : null, sprints.find((s) => s.id === t.sprint_id)?.name].filter(Boolean).join(' · ');
 }
 
 export type TaskDraft = { new: true; status?: TaskStatus; sprint_id?: number | null; due_on?: string | null };
@@ -47,6 +56,7 @@ export function TaskSheet({
       priority: t?.priority ?? 'medium', assignee_id: t?.assignee_id ?? (profile?.role === 'production' ? profile.id : ''),
       sprint_id: String(t ? t.sprint_id ?? '' : draft?.sprint_id !== undefined ? draft.sprint_id ?? '' : active?.id ?? ''),
       due_on: t?.due_on ?? draft?.due_on ?? '', labels: (t?.labels ?? []).join(', '), client_visible: t?.client_visible ?? true,
+      side: (t?.side ?? 'team') as TaskSide, owner_label: t?.owner_label ?? '', deliverable: t?.deliverable ?? '',
     } : null);
   }
   const set = <K extends keyof Form>(f: K, v: Form[K]) => setForm((x) => (x ? { ...x, [f]: v } : x));
@@ -60,6 +70,7 @@ export function TaskSheet({
       title: form.title.trim(), description: form.description.trim() || null, status: form.status, priority: form.priority,
       assignee_id: form.assignee_id || null, sprint_id: form.sprint_id ? Number(form.sprint_id) : null, due_on: form.due_on || null,
       labels: form.labels.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 8), client_visible: form.client_visible,
+      side: form.side, owner_label: form.owner_label.trim() || null, deliverable: form.deliverable.trim() || null,
     };
     try {
       if (t) must(await supabase.from('tasks').update(row).eq('id', t.id).select());
@@ -89,18 +100,13 @@ export function TaskSheet({
 
   if (!form) return <Sheet open={false} onClose={onClose}>{null}</Sheet>;
 
-  // The client's read-only view.
+  // The client's view: what it is, who does it, what it delivers. Their own tasks they can tick off.
   if (!canEdit && t) {
-    const st = statusMeta(t.status);
     return (
       <Sheet open onClose={onClose} title={t.title} width={620}>
-        <div className="mb-4 flex flex-wrap gap-2">
-          <Pill tone="neutral"><span style={{ color: st.color }}>{st.label}</span></Pill>
-          {t.due_on && <Pill tone="info">Due {day(t.due_on)}</Pill>}
-          {t.sprint_id && <Pill tone="iris">{sprints.find((s) => s.id === t.sprint_id)?.name ?? 'Sprint'}</Pill>}
-        </div>
-        {t.description && <p className="text-2 mb-5 whitespace-pre-wrap text-[14px]">{t.description}</p>}
-        <Comments taskId={t.id} />
+        <TaskFacts task={t} project={project} sprints={sprints} />
+        {t.side !== 'team' && <ClientActions task={t} project={project} onDone={onClose} />}
+        <div className="mt-6"><Comments taskId={t.id} /></div>
       </Sheet>
     );
   }
@@ -121,10 +127,25 @@ export function TaskSheet({
         </>
       }
     >
+      {t && whenLine(t, project, sprints) && (
+        <div className="text-2 mb-4 flex items-center gap-2 text-[13px] font-semibold">
+          {isKeyMoment(t) ? <Diamond className="size-4 text-iris" /> : <CalendarDays className="size-4" />}{whenLine(t, project, sprints)}
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <Input className="sm:col-span-2" label="Title" autoFocus={isNew} value={form.title} onChange={(e) => set('title', e.target.value)}
           placeholder="e.g. Design the onboarding screens" onKeyDown={(e) => { if (e.key === 'Enter') void save(); }} />
-        <Textarea className="sm:col-span-2" label="Details" rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="What does done look like?" />
+        <Textarea className="sm:col-span-2" label="What it involves" rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="The steps, in a sentence or two" />
+        <Input className="sm:col-span-2" label="Deliverable" hint="what shows it's done" value={form.deliverable} onChange={(e) => set('deliverable', e.target.value)} placeholder="e.g. Store copy pack" />
+        <div className="sm:col-span-2">
+          <div className="label">Who does it</div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Segmented value={form.side} onChange={(v) => set('side', v)} options={(['team', 'client', 'both'] as TaskSide[]).map((k) => ({ value: k, label: sideMeta(k, project.client_name).label }))} />
+            <Input className="min-w-[180px] flex-1" aria-label="Owner, as the plan says it" placeholder="Owner as the plan says it, e.g. Nuuke, ambassadors"
+              value={form.owner_label} onChange={(e) => set('owner_label', e.target.value)} />
+          </div>
+          {form.side !== 'team' && <p className="text-3 mt-1.5 text-[12px]">The client is reminded about this one too, and can mark it started or done.</p>}
+        </div>
         <Picker label="Status" value={form.status} onChange={(v) => set('status', v)}
           options={TASK_STATUSES.map((s) => ({ value: s.key, label: s.label, dot: s.color }))} />
         <Picker label="Priority" value={form.priority} onChange={(v) => set('priority', v)}
@@ -210,5 +231,71 @@ function Comments({ taskId }: { taskId: number }) {
         <Button variant="primary" loading={busy} disabled={!body.trim()} onClick={send} icon={<Send className="size-4" />} className="h-11">Send</Button>
       </div>
     </section>
+  );
+}
+
+/** The task's facts, laid out the same way for the team and the client. */
+export function TaskFacts({ task, project, sprints }: { task: Task; project: ProjectWithTeam; sprints: Sprint[] }) {
+  const st = statusMeta(task.status);
+  const side = sideMeta(task.side, project.client_name);
+  const when = whenLine(task, project, sprints);
+  const late = task.due_on && task.due_on < localISO() && task.status !== 'done';
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <Pill tone="neutral"><span style={{ color: st.color }}>{st.label}</span></Pill>
+        {isKeyMoment(task) && <Pill tone="iris" solid>{task.labels.find((l) => /launch/i.test(l)) ? 'Launch' : 'Gate'}</Pill>}
+        {late && <Pill tone="bad" solid>Late</Pill>}
+        <Pill tone="neutral"><span style={{ color: side.color }}>{task.owner_label || side.label}</span></Pill>
+      </div>
+      {when && <div className="flex items-center gap-2 text-[15px] font-bold"><CalendarDays className="size-4 text-iris" />{when}</div>}
+      {task.description && (
+        <section>
+          <div className="text-3 mb-1 text-[11px] font-bold uppercase tracking-[0.14em]">What it involves</div>
+          <p className="whitespace-pre-wrap text-[14.5px] leading-relaxed">{task.description}</p>
+        </section>
+      )}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {task.deliverable && (
+          <div className="fill flex items-start gap-3 rounded-[18px] p-3.5">
+            <Package className="mt-0.5 size-4 shrink-0 text-iris" />
+            <div><div className="text-3 text-[11px] font-bold uppercase tracking-wider">Deliverable</div><div className="text-[14px] font-semibold">{task.deliverable}</div></div>
+          </div>
+        )}
+        <div className="fill flex items-start gap-3 rounded-[18px] p-3.5">
+          <Users className="mt-0.5 size-4 shrink-0" style={{ color: side.color }} />
+          <div><div className="text-3 text-[11px] font-bold uppercase tracking-wider">Who does it</div>
+            <div className="text-[14px] font-semibold">{task.owner_label || side.label}{task.side === 'both' && !task.owner_label ? ' (both sides)' : ''}</div></div>
+        </div>
+      </div>
+      {task.due_on && <p className="text-3 text-[12px]">Due {day(task.due_on)}{task.completed_at && <> · finished {ago(task.completed_at)}</>}</p>}
+    </div>
+  );
+}
+
+function ClientActions({ task, project, onDone }: { task: Task; project: ProjectWithTeam; onDone: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const refresh = useProjectRefresh();
+  const toast = useToast();
+  const go = async (status: 'todo' | 'in_progress' | 'done') => {
+    setBusy(status);
+    try {
+      await clientTaskStatus(task.id, status);
+      if (status === 'done') celebrate('small');
+      toast({ title: status === 'done' ? 'Marked done. The team has been told.' : status === 'in_progress' ? 'Marked started' : 'Reopened', tone: 'success' });
+      refresh(project.id);
+      onDone();
+    } catch (e) { toast({ title: (e as Error).message, tone: 'danger' }); } finally { setBusy(null); }
+  };
+  return (
+    <div className="mt-5 flex flex-wrap items-center gap-2 rounded-[20px] bg-[#FF9A6B]/10 p-3.5 ring-1 ring-[#FF9A6B]/30">
+      <span className="mr-auto text-[13px] font-semibold">{task.side === 'client' ? 'This one is yours.' : 'This one is shared with the team.'}</span>
+      {task.status === 'done'
+        ? <Button size="sm" variant="glass" icon={<RotateCcw className="size-4" />} loading={busy === 'todo'} onClick={() => void go('todo')}>Reopen</Button>
+        : <>
+          {task.status !== 'in_progress' && <Button size="sm" variant="glass" icon={<Play className="size-4" />} loading={busy === 'in_progress'} onClick={() => void go('in_progress')}>Started</Button>}
+          <Button size="sm" variant="primary" icon={<Check className="size-4" />} loading={busy === 'done'} onClick={() => void go('done')}>Mark done</Button>
+        </>}
+    </div>
   );
 }

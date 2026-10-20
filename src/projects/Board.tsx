@@ -6,10 +6,10 @@ import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, pointerWithin, rectIntersection, useDraggable, useDroppable, useSensor,
   useSensors, type CollisionDetection, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core';
-import { ChevronDown, Columns3, EyeOff, Flag, LayoutList, Plus, Search, Table2 } from 'lucide-react';
+import { ChevronDown, Columns3, Diamond, EyeOff, Flag, LayoutList, Plus, Search, Table2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  PRIORITIES, TASK_STATUSES, priorityMeta, statusMeta, teamOf, useProjectRefresh, useSprints, useTasks, type ProjectWithTeam,
+  PRIORITIES, TASK_STATUSES, isKeyMoment, priorityMeta, sideMeta, statusMeta, teamOf, useProjectRefresh, useSprints, useTasks, type ProjectWithTeam,
 } from '@/data/projects';
 import { supabase } from '@/lib/supabase';
 import type { Task, TaskStatus } from '@/lib/types';
@@ -291,6 +291,9 @@ function DraggableTask({ task, canEdit, onOpen }: { task: Task; canEdit: boolean
 
 function TaskCard({ task, overlay }: { task: Task; overlay?: boolean }) {
   const pr = priorityMeta(task.priority);
+  const qc = useQueryClient();
+  const clientName = qc.getQueryData<ProjectWithTeam[]>(['projects'])?.find((p) => p.id === task.project_id)?.client_name;
+  const side = sideMeta(task.side, clientName);
   const today = localISO();
   const overdue = task.due_on && task.due_on < today && task.status !== 'done';
   return (
@@ -300,7 +303,15 @@ function TaskCard({ task, overlay }: { task: Task; overlay?: boolean }) {
       className={clsx('glass-strong relative cursor-pointer overflow-hidden rounded-[18px] p-3.5 pl-4', overlay && 'shadow-2xl')}
     >
       <span className="absolute inset-y-3 left-0 w-1 rounded-r-full" style={{ background: pr.color }} />
-      <div className={clsx('text-[14px] font-bold leading-snug', task.status === 'done' && 'text-2 line-through decoration-2')}>{task.title}</div>
+      <div className={clsx('flex items-start gap-1.5 text-[14px] font-bold leading-snug', task.status === 'done' && 'text-2 line-through decoration-2')}>
+        {isKeyMoment(task) && <Diamond className="mt-[3px] size-3.5 shrink-0 text-iris" style={{ fill: 'currentColor' }} aria-label="Gate" />}
+        <span className="min-w-0">{task.title}</span>
+      </div>
+      {task.side !== 'team' && (
+        <div className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: `${side.color}1f`, color: side.color }}>
+          <span className="size-1.5 shrink-0 rounded-full" style={{ background: side.color }} /><span className="truncate">{task.owner_label || side.label}</span>
+        </div>
+      )}
       {task.labels.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {task.labels.slice(0, 3).map((l) => <span key={l} className="fill-2 rounded-md px-1.5 py-0.5 text-[11px] font-semibold">{l}</span>)}
