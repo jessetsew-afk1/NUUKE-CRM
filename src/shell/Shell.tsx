@@ -27,10 +27,11 @@ export function Shell({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
   const location = useLocation();
   const role = profile!.role;
-  const projectsOn = role !== 'sales';
-  const projects = useProjects(projectsOn);
+  // Salespeople only see the projects they are on, so this is cheap for them too.
+  const projects = useProjects();
   const pending = usePendingReviews(role === 'client');
-  const unread = useUnread(projectsOn);
+  const onProjects = (projects.data ?? []).filter((p) => !p.archived_at).length;
+  const unread = useUnread(role !== 'sales' || onProjects > 0);
   const [current] = useCurrentProject();
   const projectId = defaultProject(projects.data, pending.data, current)?.id ?? null;
   const reviews = (pending.data ?? []).filter((f) => f.project_id === projectId).length;
@@ -39,7 +40,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const myGames = useMyGames(role !== 'client');
   const need = gamesNeedingMe(myGames.data, profile?.id);
   const games = need.invites + need.myTurn;
-  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager, games }), [role, projectId, reviews, unreadCount, techManager, games]);
+  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager, games, projects: onProjects }),
+    [role, projectId, reviews, unreadCount, techManager, games, onProjects]);
 
   return (
     <div className="relative z-10 min-h-dvh">

@@ -10,13 +10,28 @@ export interface NavItem {
   /** A count on the item; `urgent` makes it the pulsing red dot. */
   badge?: number; urgent?: boolean;
 }
-export interface NavContext { projectId?: number | null; reviews?: number; unread?: number; techManager?: boolean; games?: number }
+export interface NavContext {
+  projectId?: number | null; reviews?: number; unread?: number; techManager?: boolean; games?: number;
+  /** How many live projects a salesperson is on; their project pages show only when they are on one. */
+  projects?: number;
+}
 export interface NavGroup { label: string; items: NavItem[] }
 
 const i = (C: typeof Gauge) => <C className="size-[18px]" strokeWidth={2.1} />;
 
 export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
   const groups = baseNav(role, ctx);
+  // A salesperson put on a project (e.g. as its account manager) works it like the production team.
+  if (role === 'sales' && ctx.projects) {
+    groups.splice(1, 0, {
+      label: 'Projects',
+      items: [
+        { to: '/projects', label: 'Projects', icon: i(FolderKanban), badge: ctx.unread },
+        { to: '/work/tasks', label: 'My tasks', short: 'Tasks', icon: i(ListTodo) },
+        { to: '/work/calendar', label: 'Project calendar', short: 'Calendar', icon: i(CalendarDays) },
+      ],
+    });
+  }
   // Technical managers (any staff role) get their client meetings.
   if (ctx.techManager && role !== 'client') {
     groups[0].items.push({ to: '/meetings/tech', label: 'Client meetings', short: 'Meetings', icon: i(Video) });
