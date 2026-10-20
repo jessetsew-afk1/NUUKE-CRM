@@ -166,11 +166,18 @@ const faisal = await as('faisal@nuuke.test');
   const sp = await names(sarah);
   ok(sp.length === 2, 'A client sees only their projects (and can switch between them)', sp.join(', '));
   ok((await names(leo)).join() === 'BrightBrew Launch Campaign', "Another client sees only theirs");
-  ok((await names(zoya)).length === 0, 'Sales sees no projects');
+  ok((await names(zoya)).length === 0, 'A salesperson on no project sees none');
   ok((await names(admin)).length === 4, 'The admin sees every project');
 
   const { data: app } = await service.from('projects').select('id').eq('name', 'Halcyon Patient App').single();
   const { data: brew } = await service.from('projects').select('id').eq('name', 'BrightBrew Launch Campaign').single();
+  // A salesperson put on a project (e.g. as its account manager) sees that one, and its tasks.
+  const { error: joinErr } = await service.from('project_members').insert({ project_id: app.id, profile_id: zoya.id });
+  const zp = await names(zoya);
+  const { count: zt } = await zoya.c.from('tasks').select('*', { count: 'exact', head: true }).eq('project_id', app.id);
+  ok(!joinErr && zp.join() === 'Halcyon Patient App' && (zt ?? 0) > 0, 'A salesperson put on a project sees only that one, with its tasks', `${zp.join()} · ${zt} tasks`);
+  await service.from('project_members').delete().eq('project_id', app.id).eq('profile_id', zoya.id);
+
   const { count: hiddenAll } = await service.from('tasks').select('*', { count: 'exact', head: true }).eq('project_id', app.id).eq('client_visible', false);
   const { data: sTasks } = await sarah.c.from('tasks').select('client_visible').eq('project_id', app.id);
   ok(hiddenAll > 0 && sTasks.length > 0 && sTasks.every((t) => t.client_visible), 'A client never sees internal tasks', `${sTasks.length} visible, ${hiddenAll} hidden`);

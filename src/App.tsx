@@ -93,9 +93,9 @@ export default function App() {
             <Route path="/me/pay" element={<Only roles={STAFF}><PayPage /></Only>} />
 
             <Route path="/work" element={<Only roles={['production']}><WorkspacePage /></Only>} />
-            <Route path="/work/tasks" element={<Only roles={['production', 'admin']}><MyTasksPage /></Only>} />
-            <Route path="/work/calendar" element={<Only roles={['production', 'admin']}><WorkCalendarPage /></Only>} />
-            <Route path="/projects" element={<Only roles={['production', 'admin']}><ProjectsPage /></Only>} />
+            <Route path="/work/tasks" element={<Only roles={['production', 'admin', 'sales']}><MyTasksPage /></Only>} />
+            <Route path="/work/calendar" element={<Only roles={['production', 'admin', 'sales']}><WorkCalendarPage /></Only>} />
+            <Route path="/projects" element={<Only roles={['production', 'admin', 'sales']}><ProjectsPage /></Only>} />
             <Route path="/projects/:id/files/:fileId" element={<FileViewer />} />
             <Route path="/projects/:id/:tab?" element={<ProjectPage />} />
             <Route path="/portal/:tab?" element={<Only roles={['client']}><PortalPage /></Only>} />

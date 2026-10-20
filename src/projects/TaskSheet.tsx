@@ -53,7 +53,7 @@ export function TaskSheet({
     const active = sprints.find((s) => s.status === 'active');
     setForm(k ? {
       title: t?.title ?? '', description: t?.description ?? '', status: (t?.status ?? draft?.status ?? 'todo') as TaskStatus,
-      priority: t?.priority ?? 'medium', assignee_id: t?.assignee_id ?? (profile?.role === 'production' ? profile.id : ''),
+      priority: t?.priority ?? 'medium', assignee_id: t?.assignee_id ?? (profile?.role === 'production' || profile?.role === 'sales' ? profile.id : ''),
       sprint_id: String(t ? t.sprint_id ?? '' : draft?.sprint_id !== undefined ? draft.sprint_id ?? '' : active?.id ?? ''),
       due_on: t?.due_on ?? draft?.due_on ?? '', labels: (t?.labels ?? []).join(', '), client_visible: t?.client_visible ?? true,
       side: (t?.side ?? 'team') as TaskSide, owner_label: t?.owner_label ?? '', deliverable: t?.deliverable ?? '',
