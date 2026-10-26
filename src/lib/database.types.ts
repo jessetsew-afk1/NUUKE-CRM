@@ -1236,6 +1236,220 @@ export type Database = {
           },
         ]
       }
+      payment_counters: {
+        Row: {
+          last: number
+          prefix: string
+          year: number
+        }
+        Insert: {
+          last?: number
+          prefix: string
+          year: number
+        }
+        Update: {
+          last?: number
+          prefix?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      payment_links: {
+        Row: {
+          asked_at: string | null
+          brand: string
+          client_company: string | null
+          client_email: string | null
+          client_name: string
+          closed_at: string | null
+          closed_by: string | null
+          code: string
+          commission_fx: number | null
+          commission_owner: string | null
+          commission_usd: number | null
+          counts_for_commission: boolean
+          created_at: string
+          created_by: string | null
+          currency: string
+          deal_id: number | null
+          discount: number
+          disputed: boolean
+          due_on: string | null
+          emailed_at: string | null
+          id: number
+          items: Json
+          kept_at: string | null
+          lead_id: number | null
+          mode: string | null
+          net_amount: number | null
+          next_check_at: string
+          note: string | null
+          number: string
+          paid_amount: number | null
+          paid_at: string | null
+          payer_email: string | null
+          payer_name: string | null
+          paypal_capture_id: string | null
+          paypal_fee: number | null
+          paypal_order_id: string | null
+          project_id: number | null
+          purpose: string
+          receipt_emailed_at: string | null
+          refunded_amount: number
+          refunds: Json
+          status: string
+          subtotal: number
+          tax_amount: number
+          tax_label: string
+          tax_rate: number
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          asked_at?: string | null
+          brand: string
+          client_company?: string | null
+          client_email?: string | null
+          client_name: string
+          closed_at?: string | null
+          closed_by?: string | null
+          code?: string
+          commission_fx?: number | null
+          commission_owner?: string | null
+          commission_usd?: number | null
+          counts_for_commission?: boolean
+          created_at?: string
+          created_by?: string | null
+          currency: string
+          deal_id?: number | null
+          discount?: number
+          disputed?: boolean
+          due_on?: string | null
+          emailed_at?: string | null
+          id?: never
+          items: Json
+          kept_at?: string | null
+          lead_id?: number | null
+          mode?: string | null
+          net_amount?: number | null
+          next_check_at?: string
+          note?: string | null
+          number: string
+          paid_amount?: number | null
+          paid_at?: string | null
+          payer_email?: string | null
+          payer_name?: string | null
+          paypal_capture_id?: string | null
+          paypal_fee?: number | null
+          paypal_order_id?: string | null
+          project_id?: number | null
+          purpose: string
+          receipt_emailed_at?: string | null
+          refunded_amount?: number
+          refunds?: Json
+          status?: string
+          subtotal: number
+          tax_amount: number
+          tax_label?: string
+          tax_rate?: number
+          total: number
+          updated_at?: string
+        }
+        Update: {
+          asked_at?: string | null
+          brand?: string
+          client_company?: string | null
+          client_email?: string | null
+          client_name?: string
+          closed_at?: string | null
+          closed_by?: string | null
+          code?: string
+          commission_fx?: number | null
+          commission_owner?: string | null
+          commission_usd?: number | null
+          counts_for_commission?: boolean
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          deal_id?: number | null
+          discount?: number
+          disputed?: boolean
+          due_on?: string | null
+          emailed_at?: string | null
+          id?: never
+          items?: Json
+          kept_at?: string | null
+          lead_id?: number | null
+          mode?: string | null
+          net_amount?: number | null
+          next_check_at?: string
+          note?: string | null
+          number?: string
+          paid_amount?: number | null
+          paid_at?: string | null
+          payer_email?: string | null
+          payer_name?: string | null
+          paypal_capture_id?: string | null
+          paypal_fee?: number | null
+          paypal_order_id?: string | null
+          project_id?: number | null
+          purpose?: string
+          receipt_emailed_at?: string | null
+          refunded_amount?: number
+          refunds?: Json
+          status?: string
+          subtotal?: number
+          tax_amount?: number
+          tax_label?: string
+          tax_rate?: number
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_links_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_links_commission_owner_fkey"
+            columns: ["commission_owner"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_links_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_links_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payroll_releases: {
         Row: {
           period_start: string
@@ -1741,6 +1955,7 @@ export type Database = {
           default_daily_dials: number
           followup_gap_days: number
           free_short_days: number
+          gbp_to_usd: number
           grace_minutes: number
           half_day_max_minutes: number
           id: boolean
@@ -1769,6 +1984,7 @@ export type Database = {
           default_daily_dials?: number
           followup_gap_days?: number
           free_short_days?: number
+          gbp_to_usd?: number
           grace_minutes?: number
           half_day_max_minutes?: number
           id?: boolean
@@ -1797,6 +2013,7 @@ export type Database = {
           default_daily_dials?: number
           followup_gap_days?: number
           free_short_days?: number
+          gbp_to_usd?: number
           grace_minutes?: number
           half_day_max_minutes?: number
           id?: boolean
@@ -2084,6 +2301,10 @@ export type Database = {
         Args: { p_project: number }
         Returns: boolean
       }
+      can_take_payments: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       can_work_project: {
         Args: { p_project: number }
         Returns: boolean
@@ -2129,6 +2350,59 @@ export type Database = {
         Args: { p_reason?: string }
         Returns: Json
       }
+      close_payment_link: {
+        Args: { p_id: number }
+        Returns: {
+          asked_at: string | null
+          brand: string
+          client_company: string | null
+          client_email: string | null
+          client_name: string
+          closed_at: string | null
+          closed_by: string | null
+          code: string
+          commission_fx: number | null
+          commission_owner: string | null
+          commission_usd: number | null
+          counts_for_commission: boolean
+          created_at: string
+          created_by: string | null
+          currency: string
+          deal_id: number | null
+          discount: number
+          disputed: boolean
+          due_on: string | null
+          emailed_at: string | null
+          id: number
+          items: Json
+          kept_at: string | null
+          lead_id: number | null
+          mode: string | null
+          net_amount: number | null
+          next_check_at: string
+          note: string | null
+          number: string
+          paid_amount: number | null
+          paid_at: string | null
+          payer_email: string | null
+          payer_name: string | null
+          paypal_capture_id: string | null
+          paypal_fee: number | null
+          paypal_order_id: string | null
+          project_id: number | null
+          purpose: string
+          receipt_emailed_at: string | null
+          refunded_amount: number
+          refunds: Json
+          status: string
+          subtotal: number
+          tax_amount: number
+          tax_label: string
+          tax_rate: number
+          total: number
+          updated_at: string
+        }
+      }
       complete_sprint: {
         Args: { p_move_to?: number; p_sprint: number }
         Returns: number
@@ -2136,6 +2410,59 @@ export type Database = {
       contact_phone_digits: {
         Args: { p_personal_email: string; p_phone: string }
         Returns: string
+      }
+      create_payment_link: {
+        Args: { p: Json }
+        Returns: {
+          asked_at: string | null
+          brand: string
+          client_company: string | null
+          client_email: string | null
+          client_name: string
+          closed_at: string | null
+          closed_by: string | null
+          code: string
+          commission_fx: number | null
+          commission_owner: string | null
+          commission_usd: number | null
+          counts_for_commission: boolean
+          created_at: string
+          created_by: string | null
+          currency: string
+          deal_id: number | null
+          discount: number
+          disputed: boolean
+          due_on: string | null
+          emailed_at: string | null
+          id: number
+          items: Json
+          kept_at: string | null
+          lead_id: number | null
+          mode: string | null
+          net_amount: number | null
+          next_check_at: string
+          note: string | null
+          number: string
+          paid_amount: number | null
+          paid_at: string | null
+          payer_email: string | null
+          payer_name: string | null
+          paypal_capture_id: string | null
+          paypal_fee: number | null
+          paypal_order_id: string | null
+          project_id: number | null
+          purpose: string
+          receipt_emailed_at: string | null
+          refunded_amount: number
+          refunds: Json
+          status: string
+          subtotal: number
+          tax_amount: number
+          tax_label: string
+          tax_rate: number
+          total: number
+          updated_at: string
+        }
       }
       day_break_seconds: {
         Args: { p_day_id: number }
@@ -2336,6 +2663,59 @@ export type Database = {
         Args: { p_date: string; p_profile: string }
         Returns: boolean
       }
+      keep_payment_link: {
+        Args: { p_id: number }
+        Returns: {
+          asked_at: string | null
+          brand: string
+          client_company: string | null
+          client_email: string | null
+          client_name: string
+          closed_at: string | null
+          closed_by: string | null
+          code: string
+          commission_fx: number | null
+          commission_owner: string | null
+          commission_usd: number | null
+          counts_for_commission: boolean
+          created_at: string
+          created_by: string | null
+          currency: string
+          deal_id: number | null
+          discount: number
+          disputed: boolean
+          due_on: string | null
+          emailed_at: string | null
+          id: number
+          items: Json
+          kept_at: string | null
+          lead_id: number | null
+          mode: string | null
+          net_amount: number | null
+          next_check_at: string
+          note: string | null
+          number: string
+          paid_amount: number | null
+          paid_at: string | null
+          payer_email: string | null
+          payer_name: string | null
+          paypal_capture_id: string | null
+          paypal_fee: number | null
+          paypal_order_id: string | null
+          project_id: number | null
+          purpose: string
+          receipt_emailed_at: string | null
+          refunded_amount: number
+          refunds: Json
+          status: string
+          subtotal: number
+          tax_amount: number
+          tax_label: string
+          tax_rate: number
+          total: number
+          updated_at: string
+        }
+      }
       lead_client_key: {
         Args: {
           p_name: string
@@ -2393,6 +2773,10 @@ export type Database = {
       }
       meeting_when: {
         Args: { p_at: string; p_tz: string }
+        Returns: string
+      }
+      money: {
+        Args: { p_amount: number; p_currency: string }
         Returns: string
       }
       my_attendance: {
@@ -2535,6 +2919,60 @@ export type Database = {
           p_tone?: string
           p_who: string
         }
+        Returns: undefined
+      }
+      payment_link_commission_auto: {
+        Args: { l: Database["public"]["Tables"]["payment_links"]["Row"] }
+        Returns: number
+      }
+      payment_link_disputed: {
+        Args: { p_capture: string; p_open: boolean; p_reason?: string }
+        Returns: undefined
+      }
+      payment_link_failed: {
+        Args: { p_id: number; p_reason: string }
+        Returns: undefined
+      }
+      payment_link_paid: {
+        Args: {
+          p_amount: number
+          p_capture: string
+          p_currency: string
+          p_fee: number
+          p_id: number
+          p_mode: string
+          p_net: number
+          p_order: string
+          p_paid_at: string
+          p_payer_email: string
+          p_payer_name: string
+          p_status: string
+        }
+        Returns: Json
+      }
+      payment_link_public: {
+        Args: { p_code: string }
+        Returns: Json
+      }
+      payment_link_refunded: {
+        Args: {
+          p_amount: number
+          p_capture: string
+          p_reason?: string
+          p_refund_id: string
+        }
+        Returns: Json
+      }
+      payment_link_sync_deal: {
+        Args: { p_id: number }
+        Returns: undefined
+      }
+      payment_links_to_decide: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      payment_sweep: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       payroll_compute: {
@@ -2712,6 +3150,64 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_payment_commission: {
+        Args: {
+          p_amount_usd: number
+          p_counts: boolean
+          p_id: number
+          p_owner: string
+        }
+        Returns: {
+          asked_at: string | null
+          brand: string
+          client_company: string | null
+          client_email: string | null
+          client_name: string
+          closed_at: string | null
+          closed_by: string | null
+          code: string
+          commission_fx: number | null
+          commission_owner: string | null
+          commission_usd: number | null
+          counts_for_commission: boolean
+          created_at: string
+          created_by: string | null
+          currency: string
+          deal_id: number | null
+          discount: number
+          disputed: boolean
+          due_on: string | null
+          emailed_at: string | null
+          id: number
+          items: Json
+          kept_at: string | null
+          lead_id: number | null
+          mode: string | null
+          net_amount: number | null
+          next_check_at: string
+          note: string | null
+          number: string
+          paid_amount: number | null
+          paid_at: string | null
+          payer_email: string | null
+          payer_name: string | null
+          paypal_capture_id: string | null
+          paypal_fee: number | null
+          paypal_order_id: string | null
+          project_id: number | null
+          purpose: string
+          receipt_emailed_at: string | null
+          refunded_amount: number
+          refunds: Json
+          status: string
+          subtotal: number
+          tax_amount: number
+          tax_label: string
+          tax_rate: number
+          total: number
+          updated_at: string
+        }
+      }
       set_sheet_members: {
         Args: { p_members: string[]; p_notify?: boolean; p_sheet: number }
         Returns: number
@@ -2854,6 +3350,59 @@ export type Database = {
           status: string
           updated_at: string
           work_email: string | null
+        }
+      }
+      update_payment_link: {
+        Args: { p: Json; p_id: number }
+        Returns: {
+          asked_at: string | null
+          brand: string
+          client_company: string | null
+          client_email: string | null
+          client_name: string
+          closed_at: string | null
+          closed_by: string | null
+          code: string
+          commission_fx: number | null
+          commission_owner: string | null
+          commission_usd: number | null
+          counts_for_commission: boolean
+          created_at: string
+          created_by: string | null
+          currency: string
+          deal_id: number | null
+          discount: number
+          disputed: boolean
+          due_on: string | null
+          emailed_at: string | null
+          id: number
+          items: Json
+          kept_at: string | null
+          lead_id: number | null
+          mode: string | null
+          net_amount: number | null
+          next_check_at: string
+          note: string | null
+          number: string
+          paid_amount: number | null
+          paid_at: string | null
+          payer_email: string | null
+          payer_name: string | null
+          paypal_capture_id: string | null
+          paypal_fee: number | null
+          paypal_order_id: string | null
+          project_id: number | null
+          purpose: string
+          receipt_emailed_at: string | null
+          refunded_amount: number
+          refunds: Json
+          status: string
+          subtotal: number
+          tax_amount: number
+          tax_label: string
+          tax_rate: number
+          total: number
+          updated_at: string
         }
       }
     }

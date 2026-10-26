@@ -66,6 +66,7 @@ export default function AdminSettings() {
             <Picker label="Day's pay is salary ÷" value={form.daily_rate_basis} onChange={(v) => setForm({ ...form, daily_rate_basis: v })}
               options={[{ value: 'working_days', label: 'Scheduled working days' }, { value: 'calendar_30', label: '30' }]} />
             <Input label="USD → PKR rate" type="number" step="0.01" {...num('usd_to_pkr')} leading={<span className="text-[12px] font-bold">Rs</span>} />
+            <Input label="£1 in USD (payment links)" hint="for commission" type="number" step="0.0001" {...num('gbp_to_usd')} leading={<span className="text-[12px] font-bold">$</span>} />
           </div>
           <h4 className="mb-2 mt-5 text-[13px] font-bold">Sales targets</h4>
           <div className="grid gap-3 sm:grid-cols-3">
