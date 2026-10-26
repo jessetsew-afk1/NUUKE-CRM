@@ -127,6 +127,13 @@ agent for every person who signs in.
     - Cold call sheets: businesses they hadn't called yet go back on the sheet; the rest go to the colleague, who joins that sheet.
     - Won and lost deals, past meetings and every call they made stay in their name, so pay, stats and the leaderboard don't change. Everyone who gets work is told.
 
+**Payment links** (salespeople, project managers who lead a project, and admins: **Payments** in the menu)
+- **New payment link:** pick NUUKE or NUUKE.MARKETING, type the client, what it's for, the lines, a discount and the tax (any name and %), in USD or GBP. A live preview shows exactly what the client will see.
+- **Share it:** copy the link, or email it from billing@nuuke.us / billing@nuuke.marketing. The client pays by PayPal, card or Venmo with no PayPal account needed, and the same link becomes an animated receipt they can save as a PDF. They also get the receipt by email.
+- **Follow it:** waiting → paid live on the page; refunds and disputes come in from PayPal by themselves. Links never expire; every 10 days a link stays unpaid, its maker is asked to keep it open or close it.
+- **Commission:** a paid link becomes a won deal for its maker, worth the amount before tax in USD (GBP at the rate in Settings). Admins can give the credit to someone else, change the amount or switch it off. Test (sandbox) payments never count.
+- Setup (PayPal app, Netlify keys, pay.nuuke.us / pay.nuuke.marketing, email) is in **Putting it online → Payments** below.
+
 **Technical managers** (any staff member the admin marks)
 - **Client meetings:** the meetings they've been put on, as a calendar and an "Up next" list.
 - **Prep sheet:** each meeting shows the lead's numbers, emails and query, plus everything the rep added: website, socials, notes and the call transcript.
@@ -225,6 +232,19 @@ to start. Free projects pause after a week with no visits, so move to Pro ($25/m
 3. Deploy. Sign in with the admin you created and add your team from **Team & access**.
 4. Custom domain: **Domain management → Add a domain**, then update the Supabase Site URL to match.
 
+**Payments (PayPal).** Payment links work without these, but clients can only pay once they're set:
+
+| Variable | Value |
+|---|---|
+| `PAYPAL_MODE` | `sandbox` while testing, `live` to take real money |
+| `PAYPAL_SANDBOX_CLIENT_ID` / `PAYPAL_LIVE_CLIENT_ID` | the app's Client ID (developer.paypal.com → Apps & Credentials) |
+| `PAYPAL_SANDBOX_SECRET` / `PAYPAL_LIVE_SECRET` | the app's Secret. **Never** prefix with `VITE_` |
+| `PAYPAL_SANDBOX_WEBHOOK_ID` / `PAYPAL_LIVE_WEBHOOK_ID` | the webhook for `https://nuuke.space/.netlify/functions/paypal-webhook` (all events) |
+| `RESEND_API_KEY` | Resend key, to email invoices and receipts from the company addresses |
+
+The client's page is `pay.html` (`/pay/<code>`). Add `pay.nuuke.us` and `pay.nuuke.marketing` as domains on this site,
+then set `PAY_HOSTS_READY` in `src/payments/brands.ts` so new links use them.
+
 **File storage.** Wireframes, designs and documents live in Supabase Storage, in a private
 `project-files` bucket that the database setup creates. It's part of the same project, so
 there's nothing extra to sign up for. The free plan includes 1 GB, and Pro includes 100 GB.
@@ -243,6 +263,7 @@ For example:
 - `20261007000100_cold_call_sheets.sql` adds cold call sheets: their own list for the dialers you pick, kept apart from the normal leads.
 - `20261007000200_hand_over_work.sql` hands a leaving salesperson's clients, deals and meetings to colleagues.
 - `20261020000100_project_plans.sql` adds project plans on the calendar: who does each task and its deliverable, Import a plan, Move dates, day-before reminders and phases that move on by themselves.
+- `20261026000100_payment_links.sql` adds PayPal payment links, receipts, the 10-day keep-or-close check and commission from paid links.
 
 ---
 

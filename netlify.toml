@@ -16,6 +16,23 @@
   to = "/404.html"
   status = 404
 
+# The client's payment page: nuuke.space/pay/<code>, and every address on the two
+# pay domains (pay.nuuke.us/<code>, pay.nuuke.marketing/<code>).
+[[redirects]]
+  from = "/pay/*"
+  to = "/pay.html"
+  status = 200
+
+[[redirects]]
+  from = "https://pay.nuuke.us/*"
+  to = "/pay.html"
+  status = 200
+
+[[redirects]]
+  from = "https://pay.nuuke.marketing/*"
+  to = "/pay.html"
+  status = 200
+
 # Single-page app: every route is served by index.html.
 [[redirects]]
   from = "/*"

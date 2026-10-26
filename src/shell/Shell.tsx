@@ -19,6 +19,7 @@ import { ReviewDot } from '@/projects/bits';
 import { ErrorBoundary } from '@/app/recovery';
 import { navFor, type NavItem } from './nav';
 import { gamesNeedingMe, useMyGames } from '@/data/games';
+import { useCanTakePayments, useDecideCount } from '@/data/payments';
 import { Logo } from './Logo';
 
 const ROLE_LABEL = { admin: 'Admin', sales: 'Sales', production: 'Production', client: 'Client' } as const;
@@ -40,8 +41,10 @@ export function Shell({ children }: { children: ReactNode }) {
   const myGames = useMyGames(role !== 'client');
   const need = gamesNeedingMe(myGames.data, profile?.id);
   const games = need.invites + need.myTurn;
-  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager, games, projects: onProjects }),
-    [role, projectId, reviews, unreadCount, techManager, games, onProjects]);
+  const payments = !!useCanTakePayments().data;
+  const payDecide = useDecideCount(payments).data ?? 0;
+  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager, games, projects: onProjects, payments, payDecide }),
+    [role, projectId, reviews, unreadCount, techManager, games, onProjects, payments, payDecide]);
 
   return (
     <div className="relative z-10 min-h-dvh">

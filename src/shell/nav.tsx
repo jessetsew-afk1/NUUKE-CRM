@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   BarChart3, CalendarDays, ClipboardList, Columns3, Eye, FileSpreadsheet, FolderKanban, Gauge, Headphones, History, Kanban,
-  LayoutDashboard, ListTodo, Megaphone, MessagesSquare, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles, Gamepad2,
+  CreditCard, LayoutDashboard, ListTodo, Megaphone, MessagesSquare, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles, Gamepad2,
 } from 'lucide-react';
 import type { Role } from '@/lib/types';
 
@@ -14,6 +14,8 @@ export interface NavContext {
   projectId?: number | null; reviews?: number; unread?: number; techManager?: boolean; games?: number;
   /** How many live projects a salesperson is on; their project pages show only when they are on one. */
   projects?: number;
+  /** Can make payment links (admins, sales, project leads); `payDecide` = their links waiting on "keep or close?". */
+  payments?: boolean; payDecide?: number;
 }
 export interface NavGroup { label: string; items: NavItem[] }
 
@@ -31,6 +33,10 @@ export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
         { to: '/work/calendar', label: 'Project calendar', short: 'Calendar', icon: i(CalendarDays) },
       ],
     });
+  }
+  // Project managers (production staff who lead a project) make payment links too.
+  if (role === 'production' && ctx.payments) {
+    groups[0].items.push({ to: '/payments', label: 'Payments', icon: i(CreditCard), badge: ctx.payDecide });
   }
   // Technical managers (any staff role) get their client meetings.
   if (ctx.techManager && role !== 'client') {
@@ -61,6 +67,7 @@ function baseNav(role: Role, ctx: NavContext): NavGroup[] {
             { to: '/sales/leads', label: 'My leads', short: 'Leads', icon: i(Inbox), mobile: true },
             { to: '/sales/pipeline', label: 'Pipeline', icon: i(Kanban), mobile: true },
             { to: '/sales/meetings', label: 'Meetings', icon: i(CalendarDays) },
+            { to: '/payments', label: 'Payments', icon: i(CreditCard), badge: ctx.payDecide },
             { to: '/sales/log', label: 'Call log', icon: i(History) },
             { to: '/sales/analytics', label: 'Analytics', short: 'Stats', icon: i(BarChart3), mobile: true },
             { to: '/leaderboard', label: 'Leaderboard', icon: i(Trophy) },
@@ -78,6 +85,7 @@ function baseNav(role: Role, ctx: NavContext): NavGroup[] {
             { to: '/admin/meetings', label: 'Meetings calendar', short: 'Meetings', icon: i(CalendarDays) },
             { to: '/projects', label: 'Projects', icon: i(FolderKanban), mobile: true, badge: ctx.unread },
             { to: '/admin/leads', label: 'Leads & import', short: 'Leads', icon: i(FileSpreadsheet) },
+            { to: '/payments', label: 'Payments', icon: i(CreditCard), badge: ctx.payDecide },
             { to: '/leaderboard', label: 'Leaderboard', icon: i(Trophy) },
           ],
         },

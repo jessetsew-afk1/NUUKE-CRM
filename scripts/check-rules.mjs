@@ -741,6 +741,65 @@ const faisal = await as('faisal@nuuke.test');
   await admin.c.from('projects').delete().eq('id', proj.id);
 }
 
+// ---- payment links
+{
+  const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+  const anon = createClient(URL_, KEY, { auth: { persistSession: false } });
+  const sarah = await as('sarah@halcyon.test');
+  const link = {
+    brand: 'marketing', currency: 'GBP', client_name: 'Rules Check Ltd', purpose: 'Rule check', tax_rate: 20, tax_label: 'VAT', discount: 100,
+    items: [{ description: 'Work', quantity: 2, unit_price: 500 }],
+  };
+  const { data: made, error: e1 } = await zoya.c.rpc('create_payment_link', { p: link });
+  ok(!e1 && made.number.startsWith('NM-') && Number(made.total) === 1080 && Number(made.tax_amount) === 180,
+    'A rep makes a payment link; the server works out the total (lines − discount + tax)', e1?.message ?? `${made?.number} £${made?.total}`);
+  const { error: e2 } = await sarah.c.rpc('create_payment_link', { p: link });
+  ok(!!e2, 'A client cannot make payment links');
+  const { data: seen } = await hamza.c.from('payment_links').select('id').eq('id', made.id);
+  ok(seen.length === 0, "A rep cannot see a colleague's payment links");
+  const { error: e3 } = await hamza.c.rpc('close_payment_link', { p_id: made.id });
+  ok(!!e3, "A rep cannot close a colleague's payment link");
+  const { error: e4 } = await zoya.c.from('payment_links').update({ status: 'paid' }).eq('id', made.id);
+  const { data: still } = await service.from('payment_links').select('status').eq('id', made.id).single();
+  const { error: e5 } = await zoya.c.rpc('payment_link_paid', {
+    p_id: made.id, p_status: 'paid', p_mode: 'live', p_order: 'X', p_capture: 'X', p_payer_name: null, p_payer_email: null,
+    p_amount: 1080, p_currency: 'GBP', p_fee: null, p_net: null, p_paid_at: null,
+  });
+  ok(still.status === 'open' && !!e5, 'Nobody can mark a link paid from the browser', e4?.message ?? 'update ignored');
+  const { data: pub } = await anon.rpc('payment_link_public', { p_code: made.code });
+  const { data: anonRows } = await anon.from('payment_links').select('id');
+  ok(pub?.number === made.number && !('created_by' in pub) && (anonRows ?? []).length === 0,
+    'Anyone with the link sees its invoice, but not the table behind it');
+
+  await service.rpc('payment_link_paid', {
+    p_id: made.id, p_status: 'paid', p_mode: 'live', p_order: 'ORDER-RC', p_capture: 'CAPTURE-RC', p_payer_name: 'Payer', p_payer_email: 'p@x.test',
+    p_amount: 1080, p_currency: 'GBP', p_fee: 30, p_net: 1050, p_paid_at: new Date().toISOString(),
+  });
+  const { data: paid } = await service.from('payment_links').select('deal_id, deals(owner_id, amount_usd, stage)').eq('id', made.id).single();
+  const { data: rate } = await service.from('settings').select('gbp_to_usd').single();
+  ok(paid.deals?.stage === 'won' && paid.deals.owner_id === zoya.id && Number(paid.deals.amount_usd) === Math.round(900 * rate.gbp_to_usd * 100) / 100,
+    'A paid link becomes a won deal for its maker, before tax and in USD', JSON.stringify(paid.deals));
+  const { error: e6 } = await zoya.c.rpc('set_payment_commission', { p_id: made.id, p_counts: true, p_owner: zoya.id, p_amount_usd: 1 });
+  await admin.c.rpc('set_payment_commission', { p_id: made.id, p_counts: true, p_owner: hamza.id, p_amount_usd: 750 });
+  const { data: moved } = await service.from('deals').select('owner_id, amount_usd').eq('id', paid.deal_id).single();
+  ok(!!e6 && moved.owner_id === hamza.id && Number(moved.amount_usd) === 750, 'Only an admin changes who a payment counts for, and how much');
+  await service.rpc('payment_link_refunded', { p_capture: 'CAPTURE-RC', p_refund_id: 'R-RC', p_amount: 1080, p_reason: null });
+  const { data: gone } = await service.from('deals').select('id').eq('id', paid.deal_id);
+  ok(gone.length === 0, 'A full refund takes the payment out of commission');
+
+  const { data: old } = await zoya.c.rpc('create_payment_link', { p: { ...link, client_name: 'Slow Payer' } });
+  await service.from('payment_links').update({ next_check_at: new Date(Date.now() - 60_000).toISOString() }).eq('id', old.id);
+  await service.rpc('payment_sweep');
+  const { data: asked } = await zoya.c.from('notifications').select('title').eq('kind', 'payment.check').order('id', { ascending: false }).limit(1);
+  const { data: n } = await zoya.c.rpc('payment_links_to_decide');
+  ok(asked[0]?.title === `Still waiting on ${old.number}` && n >= 1, 'After 10 days unpaid, the maker is asked to keep the link open or close it');
+  await zoya.c.rpc('keep_payment_link', { p_id: old.id });
+  const { data: kept } = await service.from('payment_links').select('next_check_at').eq('id', old.id).single();
+  ok(new Date(kept.next_check_at) > new Date(Date.now() + 9 * 864e5), 'Keeping a link open asks again 10 days later');
+
+  await service.from('payment_links').delete().in('id', [made.id, old.id]);
+}
+
 // ---- clean up the clock-in so the demo starts fresh
 await zoya.c.rpc('clock_out');
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');

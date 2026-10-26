@@ -48,14 +48,19 @@ function netlifyFunctionsInDev(): Plugin {
 export default defineConfig(({ mode }) => {
   // Hand the server-only variables to the function above in development.
   const env = loadEnv(mode, process.cwd(), '');
-  for (const key of ['SUPABASE_URL', 'SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY']) {
-    if (env[key] && !process.env[key]) process.env[key] = env[key];
+  for (const key of Object.keys(env)) {
+    if (/^(SUPABASE_(URL|SECRET_KEY|SERVICE_ROLE_KEY)|PAYPAL_[A-Z_]+|RESEND_API_KEY)$/.test(key) && !process.env[key]) process.env[key] = env[key];
   }
 
   return {
     plugins: [react(), tailwindcss(), netlifyFunctionsInDev()],
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
     server: { port: 5173, host: '127.0.0.1' },
-    build: { sourcemap: true, chunkSizeWarningLimit: 900 },
+    build: {
+      sourcemap: true,
+      chunkSizeWarningLimit: 900,
+      // The client's payment page is its own small app (pay.html), separate from the CRM.
+      rollupOptions: { input: { main: fileURLToPath(new URL('./index.html', import.meta.url)), pay: fileURLToPath(new URL('./pay.html', import.meta.url)) } },
+    },
   };
 });
