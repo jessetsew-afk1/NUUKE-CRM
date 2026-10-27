@@ -16,6 +16,7 @@ const PipelinePage = lazy(() => import('@/pages/sales/PipelinePage'));
 const MeetingsPage = lazy(() => import('@/pages/sales/MeetingsPage'));
 const ActivityPage = lazy(() => import('@/pages/sales/ActivityPage'));
 const AnalyticsPage = lazy(() => import('@/pages/sales/AnalyticsPage'));
+const TextsPage = lazy(() => import('@/pages/sales/TextsPage'));
 const LeaderboardPage = lazy(() => import('@/pages/LeaderboardPage'));
 const AgentPage = lazy(() => import('@/pages/me/AgentPage'));
 const PayPage = lazy(() => import('@/pages/me/PayPage'));
@@ -90,6 +91,7 @@ export default function App() {
             <Route path="/sales/meetings" element={<Only roles={S}><MeetingsPage /></Only>} />
             <Route path="/sales/log" element={<Only roles={S}><ActivityPage /></Only>} />
             <Route path="/sales/analytics" element={<Only roles={S}><AnalyticsPage /></Only>} />
+            <Route path="/sales/texts" element={<Only roles={['sales', 'admin']}><TextsPage /></Only>} />
             <Route path="/leaderboard" element={<Only roles={['admin', 'sales']}><LeaderboardPage /></Only>} />
 
             <Route path="/me/agent" element={<AgentPage />} />

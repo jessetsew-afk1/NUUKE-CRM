@@ -14,6 +14,12 @@ agent for every person who signs in.
 ## What each person gets
 
 **Sales reps**
+- **Texts** (only for reps who have been given a text kit): a hand-picked list of leads to text from Zoom Phone, each with its message ready.
+  - **Send text** copies the message and opens a new Zoom text with the lead's number already in. The rep pastes (Ctrl+V, or hold and Paste on a phone), checks it and sends, then ticks **Texted**. Later they tick **Replied** or **Opted out**; **Undo** puts a lead back.
+  - Zoom can't fill in the words of a text, only the number, so the paste is the one manual step. It needs the Zoom app (6.1 or newer), not Zoom in a browser.
+  - The button only works between 9am and 8pm in the lead's own time zone; their local time is on each card.
+  - Two message versions run side by side, and the top of the page shows texted, replied and opted out for each, to see which works better.
+  - Someone who opted out can't be marked texted again. Admins see every kit. Kits are loaded by an admin with SQL into `text_kit`.
 - **Dialer.** Filter by service, platform and enquiry date, press **Start**, and work one card at a time.
   - **Card:** name, emails, platform, service, date, query details, old notes from the sheet, and call history.
     - **Phone numbers:** each number gets its own **Copy** and **Call** button, so a lead with two or three numbers is dialled one number at a time in Zoom Phone. Numbers the sheet put under an email column, and emails it put under Phone, are shown where they belong.
@@ -273,6 +279,7 @@ For example:
 - `20261026000100_payment_links.sql` adds PayPal payment links, receipts, the 10-day keep-or-close check and commission from paid links.
 - `20261027000100_longer_comments.sql` lets task comments, file comments and project messages be up to 100,000 characters (pasted meeting transcripts).
 - `20261027000200_setter_role.sql`, then `20261027000300_outreach.sql`, then `20261027000400_outreach_sweep_no_settings.sql` add appointment setters and Outreach (run them in that order, as separate queries).
+- `20261028000100_text_kit.sql` adds text kits (the Texts page).
 
 ---
 
