@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   BarChart3, CalendarDays, ClipboardList, Columns3, Eye, FileSpreadsheet, FolderKanban, Gauge, Headphones, History, Kanban,
-  CreditCard, LayoutDashboard, ListTodo, Megaphone, MessagesSquare, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles, Gamepad2,
+  CreditCard, LayoutDashboard, ListTodo, Mic, ListChecks, Megaphone, MessagesSquare, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles, Gamepad2,
 } from 'lucide-react';
 import type { Role } from '@/lib/types';
 
@@ -16,6 +16,8 @@ export interface NavContext {
   projects?: number;
   /** Can make payment links (admins, sales, project leads); `payDecide` = their links waiting on "keep or close?". */
   payments?: boolean; payDecide?: number;
+  /** Runs the appointment setters' outreach (the closer); `outreachDue` = things waiting on the setter. */
+  outreach?: boolean; outreachDue?: number;
 }
 export interface NavGroup { label: string; items: NavItem[] }
 
@@ -39,11 +41,15 @@ export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
     groups[0].items.push({ to: '/payments', label: 'Payments', icon: i(CreditCard), badge: ctx.payDecide });
   }
   // Technical managers (any staff role) get their client meetings.
-  if (ctx.techManager && role !== 'client') {
+  // The closer (a salesperson) follows the setters' outreach.
+  if (role === 'sales' && ctx.outreach) {
+    groups[0].items.push({ to: '/outreach', label: 'Outreach', icon: i(Mic) });
+  }
+  if (ctx.techManager && role !== 'client' && role !== 'setter') {
     groups[0].items.push({ to: '/meetings/tech', label: 'Client meetings', short: 'Meetings', icon: i(Video) });
   }
   // Break-time games for everyone on the team.
-  if (role !== 'client') {
+  if (role !== 'client' && role !== 'setter') {
     groups[groups.length - 1].items.push({ to: '/games', label: 'Mini Games', short: 'Games', icon: i(Gamepad2), badge: ctx.games });
   }
   return groups;
@@ -54,7 +60,7 @@ function baseNav(role: Role, ctx: NavContext): NavGroup[] {
     label: 'You',
     items: [
       { to: '/me/agent', label: 'My agent', icon: i(Shirt) },
-      ...(role !== 'client' ? [{ to: '/me/pay', label: 'Pay & attendance', icon: i(Wallet) }] : []),
+      ...(role !== 'client' && role !== 'setter' ? [{ to: '/me/pay', label: 'Pay & attendance', icon: i(Wallet) }] : []),
     ],
   };
   switch (role) {
@@ -86,6 +92,7 @@ function baseNav(role: Role, ctx: NavContext): NavGroup[] {
             { to: '/projects', label: 'Projects', icon: i(FolderKanban), mobile: true, badge: ctx.unread },
             { to: '/admin/leads', label: 'Leads & import', short: 'Leads', icon: i(FileSpreadsheet) },
             { to: '/payments', label: 'Payments', icon: i(CreditCard), badge: ctx.payDecide },
+            { to: '/outreach', label: 'Outreach', icon: i(Mic) },
             { to: '/leaderboard', label: 'Leaderboard', icon: i(Trophy) },
           ],
         },
@@ -100,6 +107,17 @@ function baseNav(role: Role, ctx: NavContext): NavGroup[] {
           ],
         },
         { label: 'You', items: [{ to: '/me/agent', label: 'My agent', icon: i(Shirt) }] },
+      ];
+    case 'setter':
+      return [
+        {
+          label: 'Outreach',
+          items: [
+            { to: '/outreach', label: 'Today', icon: i(Mic), end: true, mobile: true, badge: ctx.outreachDue },
+            { to: '/outreach/list', label: 'My prospects', short: 'Prospects', icon: i(ListChecks), mobile: true },
+          ],
+        },
+        me,
       ];
     case 'production':
       return [

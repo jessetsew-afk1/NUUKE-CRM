@@ -1236,6 +1236,170 @@ export type Database = {
           },
         ]
       }
+      outreach_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          id: number
+          kind: string
+          note: string | null
+          prospect_id: number
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          id?: never
+          kind: string
+          note?: string | null
+          prospect_id: number
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          id?: never
+          kind?: string
+          note?: string | null
+          prospect_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outreach_events_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outreach_prospects: {
+        Row: {
+          active: string | null
+          available_on: string
+          booked_at: string | null
+          call_at: string | null
+          created_at: string
+          facebook: string | null
+          follow_step: number
+          full_name: string | null
+          held_at: string | null
+          hook: string | null
+          id: number
+          ig_confirmed: boolean
+          instagram: string | null
+          last_touch_at: string | null
+          latest_date: string | null
+          latest_title: string | null
+          latest_url: string | null
+          line: string | null
+          list: string
+          name: string
+          next_follow_on: string | null
+          notes: string | null
+          outcome_note: string | null
+          position: number
+          practice: string | null
+          ready: string
+          reminded_at: string | null
+          replied_at: string | null
+          reply_kind: string | null
+          reply_note: string | null
+          sells: string | null
+          sent_at: string | null
+          setter_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          active?: string | null
+          available_on?: string
+          booked_at?: string | null
+          call_at?: string | null
+          created_at?: string
+          facebook?: string | null
+          follow_step?: number
+          full_name?: string | null
+          held_at?: string | null
+          hook?: string | null
+          id?: never
+          ig_confirmed?: boolean
+          instagram?: string | null
+          last_touch_at?: string | null
+          latest_date?: string | null
+          latest_title?: string | null
+          latest_url?: string | null
+          line?: string | null
+          list?: string
+          name: string
+          next_follow_on?: string | null
+          notes?: string | null
+          outcome_note?: string | null
+          position?: number
+          practice?: string | null
+          ready?: string
+          reminded_at?: string | null
+          replied_at?: string | null
+          reply_kind?: string | null
+          reply_note?: string | null
+          sells?: string | null
+          sent_at?: string | null
+          setter_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: string | null
+          available_on?: string
+          booked_at?: string | null
+          call_at?: string | null
+          created_at?: string
+          facebook?: string | null
+          follow_step?: number
+          full_name?: string | null
+          held_at?: string | null
+          hook?: string | null
+          id?: never
+          ig_confirmed?: boolean
+          instagram?: string | null
+          last_touch_at?: string | null
+          latest_date?: string | null
+          latest_title?: string | null
+          latest_url?: string | null
+          line?: string | null
+          list?: string
+          name?: string
+          next_follow_on?: string | null
+          notes?: string | null
+          outcome_note?: string | null
+          position?: number
+          practice?: string | null
+          ready?: string
+          reminded_at?: string | null
+          replied_at?: string | null
+          reply_kind?: string | null
+          reply_note?: string | null
+          sells?: string | null
+          sent_at?: string | null
+          setter_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_prospects_setter_id_fkey"
+            columns: ["setter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_counters: {
         Row: {
           last: number
@@ -1962,6 +2126,12 @@ export type Database = {
           low_performance_ratio: number
           low_performance_salary_factor: number
           max_attempts: number
+          outreach_booking_link: string | null
+          outreach_booking_message: string | null
+          outreach_closer_id: string | null
+          outreach_pay_per_held: number
+          outreach_reported_on: string | null
+          outreach_started_on: string | null
           payroll_cutoff_day: number
           recycle_after_days: number
           reduced_half_days: number
@@ -1991,6 +2161,12 @@ export type Database = {
           low_performance_ratio?: number
           low_performance_salary_factor?: number
           max_attempts?: number
+          outreach_booking_link?: string | null
+          outreach_booking_message?: string | null
+          outreach_closer_id?: string | null
+          outreach_pay_per_held?: number
+          outreach_reported_on?: string | null
+          outreach_started_on?: string | null
           payroll_cutoff_day?: number
           recycle_after_days?: number
           reduced_half_days?: number
@@ -2020,6 +2196,12 @@ export type Database = {
           low_performance_ratio?: number
           low_performance_salary_factor?: number
           max_attempts?: number
+          outreach_booking_link?: string | null
+          outreach_booking_message?: string | null
+          outreach_closer_id?: string | null
+          outreach_pay_per_held?: number
+          outreach_reported_on?: string | null
+          outreach_started_on?: string | null
           payroll_cutoff_day?: number
           recycle_after_days?: number
           reduced_half_days?: number
@@ -2029,7 +2211,15 @@ export type Database = {
           updated_at?: string
           usd_to_pkr?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "settings_outreach_closer_id_fkey"
+            columns: ["outreach_closer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sprints: {
         Row: {
@@ -2647,6 +2837,10 @@ export type Database = {
         Args: { p_project: number }
         Returns: boolean
       }
+      is_setter: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       is_sheet_member: {
         Args: { p_sheet: number }
         Returns: boolean
@@ -2921,6 +3115,67 @@ export type Database = {
         }
         Returns: undefined
       }
+      outreach_act: {
+        Args: {
+          p_action: string
+          p_call_at?: string
+          p_id: number
+          p_note?: string
+        }
+        Returns: {
+          active: string | null
+          available_on: string
+          booked_at: string | null
+          call_at: string | null
+          created_at: string
+          facebook: string | null
+          follow_step: number
+          full_name: string | null
+          held_at: string | null
+          hook: string | null
+          id: number
+          ig_confirmed: boolean
+          instagram: string | null
+          last_touch_at: string | null
+          latest_date: string | null
+          latest_title: string | null
+          latest_url: string | null
+          line: string | null
+          list: string
+          name: string
+          next_follow_on: string | null
+          notes: string | null
+          outcome_note: string | null
+          position: number
+          practice: string | null
+          ready: string
+          reminded_at: string | null
+          replied_at: string | null
+          reply_kind: string | null
+          reply_note: string | null
+          sells: string | null
+          sent_at: string | null
+          setter_id: string | null
+          status: string
+          updated_at: string
+        }
+      }
+      outreach_numbers: {
+        Args: { p_setter?: string }
+        Returns: Json
+      }
+      outreach_numbers_for: {
+        Args: { p_setter: string }
+        Returns: Json
+      }
+      outreach_sweep: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      outreach_today: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       payment_link_commission_auto: {
         Args: { l: Database["public"]["Tables"]["payment_links"]["Row"] }
         Returns: number
@@ -3095,6 +3350,10 @@ export type Database = {
       run_sweeps: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      runs_outreach: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
       }
       sales_leaderboard: {
         Args: { p_from: string; p_to: string }
@@ -3407,7 +3666,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "sales" | "production" | "client"
+      app_role: "admin" | "sales" | "production" | "client" | "setter"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3538,7 +3797,7 @@ export const Constants = {
   },
   public: {
     Enums: {
-      app_role: ["admin", "sales", "production", "client"],
+      app_role: ["admin", "sales", "production", "client", "setter"],
     },
   },
 } as const

@@ -2,8 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc, supabase } from '@/lib/supabase';
-import type { Employment, Profile } from '@/lib/types';
+import type { Employment, Profile, Role } from '@/lib/types';
 import { normaliseAgent, type AgentConfig } from '@/agent/catalog';
+
+/** The team proper. Clients and appointment setters (outreach only) are not staff. */
+export const STAFF_ROLES: Role[] = ['admin', 'sales', 'production'];
 
 interface AuthValue {
   loading: boolean;
@@ -112,8 +115,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profile,
     employment,
     agent: normaliseAgent(profile?.avatar, profile?.id ?? ''),
-    isStaff: !!profile && profile.role !== 'client',
-    tracksAttendance: !!employment?.tracks_attendance && !!profile && profile.role !== 'client',
+    isStaff: !!profile && STAFF_ROLES.includes(profile.role),
+    tracksAttendance: !!employment?.tracks_attendance && !!profile && STAFF_ROLES.includes(profile.role),
     refresh: () => load(session),
     signIn,
     signOut,

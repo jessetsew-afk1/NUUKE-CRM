@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import clsx from 'clsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRightLeft, Clock, Dice5, KeyRound, Plus, Power, Search, Target, Wallet } from 'lucide-react';
-import { useAuth } from '@/app/auth';
+import { useAuth, STAFF_ROLES } from '@/app/auth';
 import { hasWork, usePeopleAdmin, usePeopleWork, type Person, type PersonWork } from '@/data/admin';
 import { HandOverSheet } from '@/admin/HandOver';
 import { adminUsers, supabase } from '@/lib/supabase';
@@ -19,6 +19,7 @@ const ROLE: Record<Role, { label: string; tone: Tone; hint: string }> = {
   sales: { label: 'Sales', tone: 'info', hint: 'Dialer, their own leads, pipeline and numbers' },
   production: { label: 'Production', tone: 'good', hint: 'Developers, designers, marketing' },
   client: { label: 'Client', tone: 'warn', hint: 'Their own project portal only' },
+  setter: { label: 'Appointment setter', tone: 'iris', hint: 'Outreach only: their prospect list on their phone' },
 };
 const DEPTS = ['sales', 'development', 'design', 'marketing', 'management', 'operations'];
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -88,8 +89,8 @@ export default function AdminPeople() {
                 </div>
               </div>
               <div className="text-2 mt-4 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12px]">
-                {p.role !== 'client' && <span className="flex items-center gap-1.5"><Clock className="size-3.5" />{p.employment?.tracks_attendance ? fmtShift(p.employment.shift_start, p.employment.shift_minutes) : 'Not tracked'}</span>}
-                {p.role !== 'client' && <span className="flex items-center gap-1.5"><Wallet className="size-3.5" />{p.employment?.monthly_salary_pkr ? pkr(p.employment.monthly_salary_pkr) : '—'}</span>}
+                {STAFF_ROLES.includes(p.role) && <span className="flex items-center gap-1.5"><Clock className="size-3.5" />{p.employment?.tracks_attendance ? fmtShift(p.employment.shift_start, p.employment.shift_minutes) : 'Not tracked'}</span>}
+                {STAFF_ROLES.includes(p.role) && <span className="flex items-center gap-1.5"><Wallet className="size-3.5" />{p.employment?.monthly_salary_pkr ? pkr(p.employment.monthly_salary_pkr) : '—'}</span>}
                 {p.role === 'sales' && <span className="flex items-center gap-1.5"><Target className="size-3.5" />{usd(p.employment?.monthly_target_usd)} / month</span>}
                 {p.role === 'sales' && <span className="flex items-center gap-1.5"><Target className="size-3.5" />{count(p.employment?.daily_dial_target)} dials / day</span>}
                 <span className="text-3 col-span-2 truncate">{p.email} · {p.last_login ? `seen ${ago(p.last_login)}` : 'never signed in'}</span>
@@ -151,7 +152,7 @@ function PersonSheet({ person, onClose, work, onHandOver }: {
   }
   if (!form) return <Sheet open={false} onClose={onClose}>{null}</Sheet>;
   const set = <K extends keyof Form>(k2: K, v: Form[K]) => setForm((f) => (f ? { ...f, [k2]: v } : f));
-  const staff = form.role !== 'client';
+  const staff = STAFF_ROLES.includes(form.role);
 
   const employment = () => ({
     monthly_salary_pkr: Number(form.salary.replace(/[^\d.]/g, '')) || 0,

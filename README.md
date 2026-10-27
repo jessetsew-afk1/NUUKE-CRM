@@ -134,6 +134,13 @@ agent for every person who signs in.
 - **Commission:** a paid link becomes a won deal for its maker, worth the amount before tax in USD (GBP at the rate in Settings). Admins can give the credit to someone else, change the amount or switch it off. Test (sandbox) payments never count.
 - Setup (PayPal app, Netlify keys, pay.nuuke.us / pay.nuuke.marketing, email) is in **Putting it online → Payments** below.
 
+**Appointment setters** (role "Appointment setter": Outreach only, built for a phone)
+- **Today:** what's due, in order: tomorrow's call reminders, rebooks, people who said yes, follow-ups due, then the next prospect, with a ring for the day's target (10, then 25, 50 and 100 a day by week).
+- **Each prospect:** their latest episode or post, the 2-minute check, the voice-memo script with their personal line, and one tap to copy each message and open their Instagram (or Facebook) chat. A 90-second pause between memos keeps Instagram happy.
+- **Automatic:** day-3 and day-7 follow-ups, "No reply" three days after the last note, the closer told about every yes, "send me info" and booking, a day-before reminder, $50 per held call, and the week's five numbers to the closer and admins every Friday.
+- **Closer and admins:** Outreach in the menu shows every prospect and the numbers; mark each call Held or No-show, add prospects, and (admins) set the booking link, message, closer and pay per held call.
+- Add NUUKE to the phone's home screen (Safari → Share → Add to Home Screen) and it opens full screen like an app.
+
 **Technical managers** (any staff member the admin marks)
 - **Client meetings:** the meetings they've been put on, as a calendar and an "Up next" list.
 - **Prep sheet:** each meeting shows the lead's numbers, emails and query, plus everything the rep added: website, socials, notes and the call transcript.
@@ -265,6 +272,7 @@ For example:
 - `20261020000100_project_plans.sql` adds project plans on the calendar: who does each task and its deliverable, Import a plan, Move dates, day-before reminders and phases that move on by themselves.
 - `20261026000100_payment_links.sql` adds PayPal payment links, receipts, the 10-day keep-or-close check and commission from paid links.
 - `20261027000100_longer_comments.sql` lets task comments, file comments and project messages be up to 100,000 characters (pasted meeting transcripts).
+- `20261027000200_setter_role.sql` then `20261027000300_outreach.sql` add appointment setters and Outreach (run them in that order, as two separate queries).
 
 ---
 
