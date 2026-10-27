@@ -800,6 +800,32 @@ const faisal = await as('faisal@nuuke.test');
   await service.from('payment_links').delete().in('id', [made.id, old.id]);
 }
 
+// ---- text kits
+{
+  const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+  const row = { owner_id: zoya.id, kit: 'Rules test', name: 'Test Lead', phone: '+12025550100', time_zone: 'America/New_York', version: 'A', message: 'Hi?' };
+  const { data: made } = await service.from('text_kit').insert([{ ...row, position: 1 }, { ...row, position: 2, version: 'B' }]).select('id');
+  const ids = made.map((r) => r.id);
+  const { data: mine } = await zoya.c.from('text_kit').select('id').eq('kit', 'Rules test');
+  const { data: theirs } = await hamza.c.from('text_kit').select('id').eq('kit', 'Rules test');
+  const { data: seen } = await admin.c.from('text_kit').select('id').eq('kit', 'Rules test');
+  ok(mine.length === 2 && theirs.length === 0 && seen.length === 2, 'A text kit is seen only by its owner and admins');
+  const { error: e1 } = await zoya.c.from('text_kit').insert({ ...row, position: 3 });
+  const { data: e2 } = await zoya.c.from('text_kit').update({ message: 'changed' }).eq('id', ids[0]).select('id');
+  ok(!!e1 && (e2 ?? []).length === 0, 'A rep cannot add leads to a kit or rewrite its messages');
+  const { error: e3 } = await hamza.c.rpc('text_kit_mark', { p_id: ids[0], p_status: 'texted' });
+  ok(!!e3, "A rep cannot tick someone else's texts");
+  const { data: t } = await zoya.c.rpc('text_kit_mark', { p_id: ids[0], p_status: 'texted' });
+  const { data: rep } = await zoya.c.rpc('text_kit_mark', { p_id: ids[0], p_status: 'replied' });
+  ok(t.status === 'texted' && !!t.texted_at && rep.status === 'replied' && rep.texted_at === t.texted_at, 'Texted then Replied keeps when it was first texted');
+  await zoya.c.rpc('text_kit_mark', { p_id: ids[1], p_status: 'opted_out' });
+  const { error: e4 } = await zoya.c.rpc('text_kit_mark', { p_id: ids[1], p_status: 'texted' });
+  ok(!!e4, 'Someone who opted out cannot be marked texted again');
+  const { data: back } = await zoya.c.rpc('text_kit_mark', { p_id: ids[1], p_status: 'reset' });
+  ok(back.status === 'to_text' && !back.opted_out_at, 'Undo puts a lead back on To text');
+  await service.from('text_kit').delete().in('id', ids);
+}
+
 // ---- clean up the clock-in so the demo starts fresh
 await zoya.c.rpc('clock_out');
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   BarChart3, CalendarDays, ClipboardList, Columns3, Eye, FileSpreadsheet, FolderKanban, Gauge, Headphones, History, Kanban,
-  CreditCard, LayoutDashboard, ListTodo, Mic, ListChecks, Megaphone, MessagesSquare, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles, Gamepad2,
+  CreditCard, LayoutDashboard, ListTodo, Mic, ListChecks, Megaphone, MessagesSquare, MessageSquareText, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles, Gamepad2,
 } from 'lucide-react';
 import type { Role } from '@/lib/types';
 
@@ -18,6 +18,8 @@ export interface NavContext {
   payments?: boolean; payDecide?: number;
   /** Runs the appointment setters' outreach (the closer); `outreachDue` = things waiting on the setter. */
   outreach?: boolean; outreachDue?: number;
+  /** Has a text kit (leads picked for them to text from Zoom); `textsToSend` = still to text. */
+  texts?: boolean; textsToSend?: number;
 }
 export interface NavGroup { label: string; items: NavItem[] }
 
@@ -44,6 +46,11 @@ export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
   // The closer (a salesperson) follows the setters' outreach.
   if (role === 'sales' && ctx.outreach) {
     groups[0].items.push({ to: '/outreach', label: 'Outreach', icon: i(Mic) });
+  }
+  if ((role === 'sales' || role === 'admin') && ctx.texts) {
+    const sales = groups[0].items;
+    const at = role === 'sales' ? sales.findIndex((x) => x.to === '/sales/meetings') : sales.length;
+    sales.splice(at, 0, { to: '/sales/texts', label: 'Texts', icon: i(MessageSquareText), badge: ctx.textsToSend });
   }
   if (ctx.techManager && role !== 'client' && role !== 'setter') {
     groups[0].items.push({ to: '/meetings/tech', label: 'Client meetings', short: 'Meetings', icon: i(Video) });

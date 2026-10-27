@@ -2402,6 +2402,83 @@ export type Database = {
           },
         ]
       }
+      text_kit: {
+        Row: {
+          asked_for: string | null
+          created_at: string
+          id: number
+          kit: string
+          message: string
+          name: string
+          opted_out_at: string | null
+          owner_id: string
+          past_notes: string | null
+          phone: string
+          position: number
+          posted_on: string | null
+          replied_at: string | null
+          status: string
+          texted_at: string | null
+          time_zone: string
+          tz_label: string | null
+          tz_note: string | null
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          asked_for?: string | null
+          created_at?: string
+          id?: never
+          kit?: string
+          message: string
+          name: string
+          opted_out_at?: string | null
+          owner_id: string
+          past_notes?: string | null
+          phone: string
+          position?: number
+          posted_on?: string | null
+          replied_at?: string | null
+          status?: string
+          texted_at?: string | null
+          time_zone: string
+          tz_label?: string | null
+          tz_note?: string | null
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          asked_for?: string | null
+          created_at?: string
+          id?: never
+          kit?: string
+          message?: string
+          name?: string
+          opted_out_at?: string | null
+          owner_id?: string
+          past_notes?: string | null
+          phone?: string
+          position?: number
+          posted_on?: string | null
+          replied_at?: string | null
+          status?: string
+          texted_at?: string | null
+          time_zone?: string
+          tz_label?: string | null
+          tz_note?: string | null
+          updated_at?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "text_kit_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -3516,6 +3593,31 @@ export type Database = {
       storage_project: {
         Args: { p_name: string }
         Returns: number
+      }
+      text_kit_mark: {
+        Args: { p_id: number; p_status: string }
+        Returns: {
+          asked_for: string | null
+          created_at: string
+          id: number
+          kit: string
+          message: string
+          name: string
+          opted_out_at: string | null
+          owner_id: string
+          past_notes: string | null
+          phone: string
+          position: number
+          posted_on: string | null
+          replied_at: string | null
+          status: string
+          texted_at: string | null
+          time_zone: string
+          tz_label: string | null
+          tz_note: string | null
+          updated_at: string
+          version: string
+        }
       }
       tidy_repeat_leads: {
         Args: { p_apply?: boolean; p_whole_sheet?: string[] }
