@@ -178,6 +178,25 @@ export function TaskSheet({
   );
 }
 
+/** The database allows comments up to this long (a couple of hours of meeting transcript). */
+const MAX_COMMENT = 100_000;
+
+/** A long comment (a pasted transcript) shows its start, with the rest one tap away. */
+function LongText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 700;
+  return (
+    <>
+      <p className="mt-0.5 whitespace-pre-wrap break-words text-[14px]">{long && !open ? `${text.slice(0, 600).trimEnd()}…` : text}</p>
+      {long && (
+        <button type="button" onClick={() => setOpen((o) => !o)} className="mt-1 text-[12px] font-semibold text-iris hover:underline">
+          {open ? 'Show less' : `Show all (${text.length.toLocaleString()} characters)`}
+        </button>
+      )}
+    </>
+  );
+}
+
 function Comments({ taskId }: { taskId: number }) {
   const comments = useTaskComments(taskId);
   const people = usePeopleMap();
@@ -189,6 +208,10 @@ function Comments({ taskId }: { taskId: number }) {
 
   const send = async () => {
     if (!body.trim()) return;
+    if (body.trim().length > MAX_COMMENT) {
+      toast({ title: 'That comment is too long', body: `Keep it under ${MAX_COMMENT.toLocaleString()} characters, or attach it as a file.`, tone: 'danger' });
+      return;
+    }
     setBusy(true);
     const { error } = await supabase.from('task_comments').insert({ task_id: taskId, body: body.trim(), author_id: profile!.id });
     setBusy(false);
@@ -212,7 +235,7 @@ function Comments({ taskId }: { taskId: number }) {
                   {who?.role === 'client' && <Pill tone="warn" className="!h-5 !text-[10px]">Client</Pill>}
                   <span className="text-3">{ago(c.created_at)}</span>
                 </div>
-                <p className="mt-0.5 whitespace-pre-wrap text-[14px]">{c.body}</p>
+                <LongText text={c.body} />
               </div>
             </motion.div>
           );

@@ -264,6 +264,7 @@ For example:
 - `20261007000200_hand_over_work.sql` hands a leaving salesperson's clients, deals and meetings to colleagues.
 - `20261020000100_project_plans.sql` adds project plans on the calendar: who does each task and its deliverable, Import a plan, Move dates, day-before reminders and phases that move on by themselves.
 - `20261026000100_payment_links.sql` adds PayPal payment links, receipts, the 10-day keep-or-close check and commission from paid links.
+- `20261027000100_longer_comments.sql` lets task comments, file comments and project messages be up to 100,000 characters (pasted meeting transcripts).
 
 ---
 
