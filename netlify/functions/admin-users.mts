@@ -9,7 +9,7 @@
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-type Role = 'admin' | 'sales' | 'production' | 'client';
+type Role = 'admin' | 'sales' | 'production' | 'client' | 'setter';
 
 interface EmploymentInput {
   monthly_salary_pkr?: number;
@@ -38,7 +38,7 @@ type Body =
   | { action: 'set_active'; user_id: string; active: boolean }
   | { action: 'update'; user_id: string; role?: Role; department?: string | null; title?: string | null; full_name?: string; email?: string };
 
-const ROLES: Role[] = ['admin', 'sales', 'production', 'client'];
+const ROLES: Role[] = ['admin', 'sales', 'production', 'client', 'setter'];
 
 const json = (status: number, data: unknown) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -155,7 +155,8 @@ export default async (req: Request): Promise<Response> => {
         return json(400, { error: profileErr.message });
       }
 
-      if (body.role !== 'client') {
+      // Clients and appointment setters have no shifts or salary here.
+      if (body.role !== 'client' && body.role !== 'setter') {
         const e = body.employment ?? {};
         const { error: empErr } = await db.from('employment').insert({
           profile_id: id,

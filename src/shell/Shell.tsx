@@ -5,7 +5,7 @@ import clsx from 'clsx';
 import {
   AlertTriangle, Bell, CheckCheck, ChevronRight, Coffee, LogOut, MoreHorizontal, Moon, Play, Shirt, Sun, Wallet,
 } from 'lucide-react';
-import { useAuth } from '@/app/auth';
+import { STAFF_ROLES, useAuth } from '@/app/auth';
 import { useAttendance, useLiveClock } from '@/app/attendance';
 import { useNotifications } from '@/app/notifications';
 import { useTheme } from '@/app/theme';
@@ -20,9 +20,11 @@ import { ErrorBoundary } from '@/app/recovery';
 import { navFor, type NavItem } from './nav';
 import { gamesNeedingMe, useMyGames } from '@/data/games';
 import { useCanTakePayments, useDecideCount } from '@/data/payments';
+import { dueCount, useProspects } from '@/data/outreach';
+import { useSettings } from '@/data/common';
 import { Logo } from './Logo';
 
-const ROLE_LABEL = { admin: 'Admin', sales: 'Sales', production: 'Production', client: 'Client' } as const;
+const ROLE_LABEL = { admin: 'Admin', sales: 'Sales', production: 'Production', client: 'Client', setter: 'Appointment setter' } as const;
 
 export function Shell({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
@@ -38,13 +40,17 @@ export function Shell({ children }: { children: ReactNode }) {
   const reviews = (pending.data ?? []).filter((f) => f.project_id === projectId).length;
   const unreadCount = (unread.data ?? []).reduce((s, u) => s + (role !== 'client' || u.project_id === projectId ? Number(u.unread) : 0), 0);
   const techManager = !!profile?.is_technical_manager;
-  const myGames = useMyGames(role !== 'client');
+  const myGames = useMyGames(STAFF_ROLES.includes(role));
   const need = gamesNeedingMe(myGames.data, profile?.id);
   const games = need.invites + need.myTurn;
   const payments = !!useCanTakePayments().data;
   const payDecide = useDecideCount(payments).data ?? 0;
-  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager, games, projects: onProjects, payments, payDecide }),
-    [role, projectId, reviews, unreadCount, techManager, games, onProjects, payments, payDecide]);
+  const settings = useSettings();
+  const outreach = role === 'sales' && !!profile?.id && settings.data?.outreach_closer_id === profile.id;
+  const prospects = useProspects(role === 'setter');
+  const outreachDue = role === 'setter' ? dueCount(prospects.data) : 0;
+  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager, games, projects: onProjects, payments, payDecide, outreach, outreachDue }),
+    [role, projectId, reviews, unreadCount, techManager, games, onProjects, payments, payDecide, outreach, outreachDue]);
 
   return (
     <div className="relative z-10 min-h-dvh">
@@ -186,7 +192,7 @@ function UserMenu({ onClose, placement }: { onClose: () => void; placement: 'up'
       )}
     >
       <MenuItem icon={<Shirt className="size-4" />} onClick={() => go('/me/agent')}>Dress up my agent</MenuItem>
-      {profile?.role !== 'client' && <MenuItem icon={<Wallet className="size-4" />} onClick={() => go('/me/pay')}>Pay & attendance</MenuItem>}
+      {profile && STAFF_ROLES.includes(profile.role) && <MenuItem icon={<Wallet className="size-4" />} onClick={() => go('/me/pay')}>Pay & attendance</MenuItem>}
       <MenuItem icon={theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />} onClick={toggle}>
         {theme === 'dark' ? 'Light mode' : 'Dark mode'}
       </MenuItem>
@@ -196,7 +202,7 @@ function UserMenu({ onClose, placement }: { onClose: () => void; placement: 'up'
         danger
         onClick={async () => { setBusy(true); await signOut(); }}
       >
-        {busy ? 'Signing out…' : profile?.role === 'client' || profile?.role === 'admin' ? 'Sign out' : 'Sign out & end shift'}
+        {busy ? 'Signing out…' : profile?.role === 'sales' || profile?.role === 'production' ? 'Sign out & end shift' : 'Sign out'}
       </MenuItem>
     </motion.div>
   );

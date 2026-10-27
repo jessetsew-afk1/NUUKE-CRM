@@ -30,6 +30,8 @@ const AdminMeetingsPage = lazy(() => import('@/pages/admin/AdminMeetingsPage'));
 const TechMeetingsPage = lazy(() => import('@/pages/TechMeetingsPage'));
 const GamesPage = lazy(() => import('@/pages/GamesPage'));
 const PaymentsPage = lazy(() => import('@/pages/payments/PaymentsPage'));
+const OutreachPage = lazy(() => import('@/pages/outreach/OutreachPage'));
+const OutreachList = lazy(() => import('@/pages/outreach/OutreachList'));
 const AdminHome = lazy(() => import('@/pages/admin/AdminHome'));
 const AdminSales = lazy(() => import('@/pages/admin/AdminSales'));
 const AdminLeads = lazy(() => import('@/pages/admin/AdminLeads'));
@@ -39,7 +41,7 @@ const AdminPayroll = lazy(() => import('@/pages/admin/AdminPayroll'));
 const AdminAudit = lazy(() => import('@/pages/admin/AdminAudit'));
 const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'));
 
-export const HOME: Record<Role, string> = { admin: '/admin', sales: '/sales', production: '/work', client: '/portal' };
+export const HOME: Record<Role, string> = { admin: '/admin', sales: '/sales', production: '/work', client: '/portal', setter: '/outreach' };
 
 function Only({ roles, children }: { roles: Role[]; children: ReactNode }) {
   const { profile } = useAuth();
@@ -107,6 +109,8 @@ export default function App() {
             <Route path="/meetings/tech" element={<Only roles={STAFF}><TechMeetingsPage /></Only>} />
             <Route path="/games" element={<Only roles={STAFF}><GamesPage /></Only>} />
             <Route path="/payments" element={<Only roles={STAFF}><PaymentsPage /></Only>} />
+            <Route path="/outreach" element={<Only roles={['setter', 'admin', 'sales']}><OutreachPage /></Only>} />
+            <Route path="/outreach/list" element={<Only roles={['setter', 'admin', 'sales']}><OutreachList /></Only>} />
             <Route path="/admin/leads" element={<Only roles={A}><AdminLeads /></Only>} />
             <Route path="/admin/people" element={<Only roles={A}><AdminPeople /></Only>} />
             <Route path="/admin/attendance" element={<Only roles={A}><AdminAttendance /></Only>} />
