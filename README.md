@@ -18,6 +18,7 @@ agent for every person who signs in.
   - **Send text** copies the message and opens a new Zoom text with the lead's number already in. The rep pastes (Ctrl+V, or hold and Paste on a phone), checks it and sends, then ticks **Texted**. Later they tick **Replied** or **Opted out**; **Undo** puts a lead back.
   - Zoom can't fill in the words of a text, only the number, so the paste is the one manual step. It needs the Zoom app (6.1 or newer), not Zoom in a browser.
   - The button only works between 9am and 8pm in the lead's own time zone; their local time is on each card.
+  - **Search** by name or number (3+ digits) looks through every list, so a lead is found whether or not they've been texted.
   - Two message versions run side by side, and the top of the page shows texted, replied and opted out for each, to see which works better.
   - Someone who opted out can't be marked texted again. Admins see every kit. Kits are loaded by an admin with SQL into `text_kit`.
 - **Dialer.** Filter by service, platform and enquiry date, press **Start**, and work one card at a time.
