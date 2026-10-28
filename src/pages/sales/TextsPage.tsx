@@ -38,6 +38,22 @@ function useMinute() {
 
 const hourLabel = (h: number) => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
 
+/** Short names for the zones a kit can hold. */
+const ZONE_NAME: Record<string, string> = {
+  'America/New_York': 'Eastern', 'America/Chicago': 'Central', 'America/Denver': 'Mountain', 'America/Phoenix': 'Arizona',
+  'America/Los_Angeles': 'Pacific', 'America/Anchorage': 'Alaska', 'Pacific/Honolulu': 'Hawaii', 'America/Puerto_Rico': 'Puerto Rico',
+};
+const zoneName = (tz: string) => ZONE_NAME[tz] ?? tz.split('/').pop()!.replace(/_/g, ' ');
+
+/** Minutes ahead of UTC right now, so zones list east to west. */
+function utcOffset(tz: string, now: Date) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })
+    .formatToParts(now).map((x) => [x.type, x.value]));
+  return (Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute) - now.getTime()) / 60_000;
+}
+
+type ZoneKey = 'all' | 'open' | string;
+
 /** Lower-case, without accents, so "jose" finds "José". */
 const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -53,11 +69,15 @@ export default function TextsPage() {
   const people = usePeople();
   const now = useMinute();
   const [filter, setFilter] = useState<KitStatus | 'all'>('to_text');
+  const [zone, setZone] = useState<ZoneKey>('all');
   const [q, setQ] = useState('');
   const term = q.trim();
   const all = rows.data ?? [];
+  const inStatus = all.filter((r) => filter === 'all' || r.status === filter);
+  const inZone = (r: KitText, z: ZoneKey) => z === 'all' || (z === 'open' ? localTime(r.time_zone, now).ok : r.time_zone === z);
+  const zones = [...new Set(all.map((r) => r.time_zone))].sort((a, b) => utcOffset(b, now) - utcOffset(a, now));
   // A search looks through every list, so a name is found whether or not they've been texted yet.
-  const shown = term ? all.filter((r) => matches(r, term)) : all.filter((r) => filter === 'all' || r.status === filter);
+  const shown = term ? all.filter((r) => matches(r, term)) : inStatus.filter((r) => inZone(r, zone));
   const owners = [...new Set(all.map((r) => r.owner_id))];
   const ownerName = (id: string) => people.data?.find((p) => p.id === id)?.full_name ?? 'someone';
   const forOthers = owners.some((id) => id !== profile?.id);
@@ -116,9 +136,24 @@ export default function TextsPage() {
       <div className={clsx('scroll-x mb-3 flex gap-2 overflow-x-auto pb-1', term && 'opacity-50')}>
         {FILTERS.map((f) => (
           <Chip key={f.key} active={!term && filter === f.key} onClick={() => { setQ(''); setFilter(f.key); }}
-            count={f.key === 'all' ? all.length : all.filter((r) => r.status === f.key).length}>{f.label}</Chip>
+            count={all.filter((r) => (f.key === 'all' || r.status === f.key) && inZone(r, zone)).length}>{f.label}</Chip>
         ))}
       </div>
+
+      {zones.length > 1 && (
+        <div className={clsx('scroll-x mb-3 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible', term && 'opacity-50')} aria-label="Time zones">
+          <Chip active={!term && zone === 'all'} onClick={() => { setQ(''); setZone('all'); }} count={inStatus.length}>All time zones</Chip>
+          <Chip active={!term && zone === 'open'} onClick={() => { setQ(''); setZone('open'); }} dot="#30C46C"
+            count={inStatus.filter((r) => inZone(r, 'open')).length}>Open now</Chip>
+          {zones.map((z) => {
+            const t = localTime(z, now);
+            return (
+              <Chip key={z} active={!term && zone === z} onClick={() => { setQ(''); setZone(z); }} dot={t.ok ? '#30C46C' : '#8E8AA0'}
+                count={inStatus.filter((r) => r.time_zone === z).length}>{zoneName(z)} · {t.label}</Chip>
+            );
+          })}
+        </div>
+      )}
 
       {term && !rows.isLoading && (
         <p className="text-2 mb-3 text-[13px]">{shown.length} {shown.length === 1 ? 'match' : 'matches'} for “{term}” across every list.</p>
@@ -128,8 +163,11 @@ export default function TextsPage() {
           {shown.map((r) => <TextCard key={r.id} r={r} now={now} />)}
         </div>
       ) : (
-        <Empty title={term ? 'Nobody by that name' : filter === 'to_text' ? 'Everyone has been texted' : 'Nobody here'}
-          body={term ? 'Try part of their first or last name, or their number.' : filter === 'to_text' ? 'Check Texted for anyone who replies.' : undefined} />
+        <Empty
+          title={term ? 'Nobody by that name' : zone !== 'all' && inStatus.length ? (zone === 'open' ? 'Nobody is in texting hours right now' : `Nobody here in ${zoneName(zone)}`) : filter === 'to_text' ? 'Everyone has been texted' : 'Nobody here'}
+          body={term ? 'Try part of their first or last name, or their number.'
+            : zone !== 'all' && inStatus.length ? `Texting opens at ${hourLabel(TEXT_FROM)} in each lead's own time zone. Try another zone.`
+            : filter === 'to_text' ? 'Check Texted for anyone who replies.' : undefined} />
       )}
     </div>
   );
