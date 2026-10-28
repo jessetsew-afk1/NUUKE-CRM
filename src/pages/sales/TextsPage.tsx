@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from 'react';
 import clsx from 'clsx';
-import { Ban, Check, Clock, Copy, History, MessageSquareText, Reply, RotateCcw, Send } from 'lucide-react';
+import { Ban, Check, Clock, Copy, History, MessageSquareText, Reply, RotateCcw, Search, Send, X } from 'lucide-react';
 import { useAuth } from '@/app/auth';
 import { usePeople } from '@/data/common';
 import {
@@ -13,7 +13,7 @@ import {
   type KitStatus, type KitText,
 } from '@/data/textKit';
 import { dayShort, pct } from '@/lib/format';
-import { Button, Chip, Empty, PageHeader, Panel, Pill, Skeleton } from '@/ui/kit';
+import { Button, Chip, Empty, Input, PageHeader, Panel, Pill, Skeleton } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 
 const FILTERS: { key: KitStatus | 'all'; label: string }[] = [
@@ -38,14 +38,26 @@ function useMinute() {
 
 const hourLabel = (h: number) => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
 
+/** Lower-case, without accents, so "jose" finds "José". */
+const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/** A search matches the name, or the number once three or more digits are typed. */
+function matches(r: KitText, term: string) {
+  const digits = term.replace(/\D/g, '');
+  return fold(r.name).includes(fold(term)) || (digits.length >= 3 && r.phone.replace(/\D/g, '').includes(digits));
+}
+
 export default function TextsPage() {
   const { profile } = useAuth();
   const rows = useTextKit();
   const people = usePeople();
   const now = useMinute();
   const [filter, setFilter] = useState<KitStatus | 'all'>('to_text');
+  const [q, setQ] = useState('');
+  const term = q.trim();
   const all = rows.data ?? [];
-  const shown = all.filter((r) => filter === 'all' || r.status === filter);
+  // A search looks through every list, so a name is found whether or not they've been texted yet.
+  const shown = term ? all.filter((r) => matches(r, term)) : all.filter((r) => filter === 'all' || r.status === filter);
   const owners = [...new Set(all.map((r) => r.owner_id))];
   const ownerName = (id: string) => people.data?.find((p) => p.id === id)?.full_name ?? 'someone';
   const forOthers = owners.some((id) => id !== profile?.id);
@@ -90,20 +102,34 @@ export default function TextsPage() {
         ))}
       </div>
 
-      <div className="scroll-x mb-3 flex gap-2 overflow-x-auto pb-1">
+      <div className="relative mb-3">
+        <Input placeholder="Search by name or number" value={q} onChange={(e) => setQ(e.target.value)}
+          leading={<Search className="size-4" />} aria-label="Search texts" />
+        {q && (
+          <button onClick={() => setQ('')} aria-label="Clear search"
+            className="text-3 absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full hover:bg-[var(--fill)]">
+            <X className="size-4" />
+          </button>
+        )}
+      </div>
+
+      <div className={clsx('scroll-x mb-3 flex gap-2 overflow-x-auto pb-1', term && 'opacity-50')}>
         {FILTERS.map((f) => (
-          <Chip key={f.key} active={filter === f.key} onClick={() => setFilter(f.key)}
+          <Chip key={f.key} active={!term && filter === f.key} onClick={() => { setQ(''); setFilter(f.key); }}
             count={f.key === 'all' ? all.length : all.filter((r) => r.status === f.key).length}>{f.label}</Chip>
         ))}
       </div>
 
+      {term && !rows.isLoading && (
+        <p className="text-2 mb-3 text-[13px]">{shown.length} {shown.length === 1 ? 'match' : 'matches'} for “{term}” across every list.</p>
+      )}
       {rows.isLoading ? <Skeleton className="h-64" /> : shown.length ? (
         <div className="grid grid-cols-1 gap-3">
           {shown.map((r) => <TextCard key={r.id} r={r} now={now} />)}
         </div>
       ) : (
-        <Empty title={filter === 'to_text' ? 'Everyone has been texted' : 'Nobody here'}
-          body={filter === 'to_text' ? 'Check Texted for anyone who replies.' : undefined} />
+        <Empty title={term ? 'Nobody by that name' : filter === 'to_text' ? 'Everyone has been texted' : 'Nobody here'}
+          body={term ? 'Try part of their first or last name, or their number.' : filter === 'to_text' ? 'Check Texted for anyone who replies.' : undefined} />
       )}
     </div>
   );
