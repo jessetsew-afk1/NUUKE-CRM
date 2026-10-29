@@ -83,6 +83,7 @@ export default function AdminPeople() {
                     <Pill tone={ROLE[p.role].tone}>{ROLE[p.role].label}</Pill>
                     {p.department && <Pill tone="neutral">{p.department}</Pill>}
                     {p.is_technical_manager && <Pill tone="iris">Tech manager</Pill>}
+                    {p.is_sales_lead && <Pill tone="info">Sales lead</Pill>}
                     {!p.is_active && <Pill tone="bad" solid>Off</Pill>}
                     {!p.is_active && p.role === 'sales' && hasWork(work.data?.get(p.id)) && <Pill tone="warn">Work to hand over</Pill>}
                   </div>
@@ -111,7 +112,7 @@ export default function AdminPeople() {
 interface Form {
   full_name: string; email: string; role: Role; department: string; title: string; phone: string; password: string;
   salary: string; tracks: boolean; shift_start: string; shift_hours: string; work_days: number[]; dial_target: string;
-  target_usd: string; joined_on: string; active: boolean; tm: boolean;
+  target_usd: string; joined_on: string; active: boolean; tm: boolean; lead: boolean;
 }
 
 const genPassword = () => {
@@ -147,7 +148,7 @@ function PersonSheet({ person, onClose, work, onHandOver }: {
       shift_start: (e?.shift_start ?? '18:00').slice(0, 5), shift_hours: String((e?.shift_minutes ?? 540) / 60),
       work_days: e?.work_days ?? [1, 2, 3, 4, 5], dial_target: String(e?.daily_dial_target ?? 250),
       target_usd: e?.monthly_target_usd ? String(e.monthly_target_usd) : '', joined_on: e?.joined_on ?? localISO(),
-      active: p?.is_active ?? true, tm: p?.is_technical_manager ?? false,
+      active: p?.is_active ?? true, tm: p?.is_technical_manager ?? false, lead: p?.is_sales_lead ?? false,
     } : null);
   }
   if (!form) return <Sheet open={false} onClose={onClose}>{null}</Sheet>;
@@ -177,6 +178,10 @@ function PersonSheet({ person, onClose, work, onHandOver }: {
           const { error } = await supabase.from('profiles').update({ is_technical_manager: true }).eq('id', created.id);
           if (error) throw new Error(error.message);
         }
+        if (form.role === 'sales' && form.lead && created.id) {
+          const { error } = await supabase.from('profiles').update({ is_sales_lead: true }).eq('id', created.id);
+          if (error) throw new Error(error.message);
+        }
         toast({ title: `${form.full_name} can sign in now`, body: `${form.email} · password ${form.password}`, tone: 'success', duration: 12000 });
       } else if (p) {
         const changes: Record<string, unknown> = {};
@@ -190,6 +195,11 @@ function PersonSheet({ person, onClose, work, onHandOver }: {
         const tm = staff && form.tm;
         if (tm !== p.is_technical_manager) {
           const { error } = await supabase.from('profiles').update({ is_technical_manager: tm }).eq('id', p.id);
+          if (error) throw new Error(error.message);
+        }
+        const lead = form.role === 'sales' && form.lead;
+        if (lead !== p.is_sales_lead) {
+          const { error } = await supabase.from('profiles').update({ is_sales_lead: lead }).eq('id', p.id);
           if (error) throw new Error(error.message);
         }
         if (staff) {
@@ -235,6 +245,15 @@ function PersonSheet({ person, onClose, work, onHandOver }: {
                   <div className="text-2 text-[13px]">Reps can put them on client meetings. They see those meetings, with the lead and the rep's prep, in “Client meetings”.</div>
                 </div>
                 <Switch checked={form.tm} onChange={(v) => set('tm', v)} />
+              </div>
+            )}
+            {form.role === 'sales' && (
+              <div className="fill flex items-center justify-between gap-4 rounded-[18px] p-3.5 sm:col-span-2">
+                <div>
+                  <div className="text-[14px] font-bold">Sales lead</div>
+                  <div className="text-2 text-[13px]">Sees the Team page: every rep's calls, how they ended, and their Zoom texts. Not their leads, deals or pay.</div>
+                </div>
+                <Switch checked={form.lead} onChange={(v) => set('lead', v)} />
               </div>
             )}
             <div className="sm:col-span-2">

@@ -24,6 +24,7 @@ agent for every person who signs in.
   - Someone who opted out can't be marked texted again. Admins see every kit. Kits are loaded by an admin with SQL into `text_kit`.
   - **Hand out leads** (admins): give any number of leads still to text from one person to another, e.g. 50 to each appointment setter. The last ones in the giver's list move; texted and replied ones stay. Admins can also view one person's list at a time.
   - **Appointment setters** get Texts in their phone's bottom bar when they have leads. The kits are written in Isaiah's voice, so a setter's copy opens with their own name ("Ashley here, from Isaiah's team.", or "Soy Ashley, del equipo de Isaiah." in Spanish).
+- **Team** (admins, and salespeople an admin marks as **Sales lead** in Team & access): every rep's calls, connects, meetings booked, Zoom texts sent, replies and texts left, for today, yesterday, 7 or 30 days. Open a rep for how their calls ended and their calls and texts per day. Replies count against the texts sent in the same range. A sales lead sees these numbers only, not other reps' leads, deals or pay.
 - **Dialer.** Filter by service, platform and enquiry date, press **Start**, and work one card at a time.
   - **Card:** name, emails, platform, service, date, query details, old notes from the sheet, and call history.
     - **Phone numbers:** each number gets its own **Copy** and **Call** button, so a lead with two or three numbers is dialled one number at a time in Zoom Phone. Numbers the sheet put under an email column, and emails it put under Phone, are shown where they belong.
@@ -285,6 +286,7 @@ For example:
 - `20261027000200_setter_role.sql`, then `20261027000300_outreach.sql`, then `20261027000400_outreach_sweep_no_settings.sql` add appointment setters and Outreach (run them in that order, as separate queries).
 - `20261028000100_text_kit.sql` adds text kits (the Texts page).
 - `20261029000100_text_kit_assign.sql` lets admins hand out text kit leads.
+- `20261029000200_team_activity.sql` adds sales leads and the Team page's numbers.
 
 ---
 

@@ -1662,6 +1662,7 @@ export type Database = {
           full_name: string
           id: string
           is_active: boolean
+          is_sales_lead: boolean
           is_technical_manager: boolean
           phone: string | null
           role: Database["public"]["Enums"]["app_role"]
@@ -1676,6 +1677,7 @@ export type Database = {
           full_name: string
           id: string
           is_active?: boolean
+          is_sales_lead?: boolean
           is_technical_manager?: boolean
           phone?: string | null
           role: Database["public"]["Enums"]["app_role"]
@@ -1690,6 +1692,7 @@ export type Database = {
           full_name?: string
           id?: string
           is_active?: boolean
+          is_sales_lead?: boolean
           is_technical_manager?: boolean
           phone?: string | null
           role?: Database["public"]["Enums"]["app_role"]
@@ -3477,6 +3480,10 @@ export type Database = {
         Args: { p_answers: Json; p_lead_id: number }
         Returns: Json
       }
+      sees_team: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       set_attendance_override: {
         Args: {
           p_date: string
@@ -3593,6 +3600,29 @@ export type Database = {
       storage_project: {
         Args: { p_name: string }
         Returns: number
+      }
+      team_activity: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          avatar: Json
+          connected: number
+          daily: Json
+          daily_target: number
+          dials: number
+          full_name: string
+          last_call_at: string
+          last_text_at: string
+          meetings_booked: number
+          outcomes: Json
+          profile_id: string
+          prospects: number
+          role: Database["public"]["Enums"]["app_role"]
+          texts_left: number
+          texts_opted_out: number
+          texts_replied: number
+          texts_sent: number
+          texts_total: number
+        }[]
       }
       text_kit_assign: {
         Args: { p_count: number; p_from: string; p_to: string }
