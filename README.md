@@ -22,6 +22,8 @@ agent for every person who signs in.
   - **Time zone filter:** one chip per zone with its local time (green dot while it's 9am to 8pm there), plus **Open now** for everyone who can be texted right now.
   - Two message versions run side by side, and the top of the page shows texted, replied and opted out for each, to see which works better.
   - Someone who opted out can't be marked texted again. Admins see every kit. Kits are loaded by an admin with SQL into `text_kit`.
+  - **Hand out leads** (admins): give any number of leads still to text from one person to another, e.g. 50 to each appointment setter. The last ones in the giver's list move; texted and replied ones stay. Admins can also view one person's list at a time.
+  - **Appointment setters** get Texts in their phone's bottom bar when they have leads. The kits are written in Isaiah's voice, so a setter's copy opens with their own name ("Ashley here, from Isaiah's team.", or "Soy Ashley, del equipo de Isaiah." in Spanish).
 - **Dialer.** Filter by service, platform and enquiry date, press **Start**, and work one card at a time.
   - **Card:** name, emails, platform, service, date, query details, old notes from the sheet, and call history.
     - **Phone numbers:** each number gets its own **Copy** and **Call** button, so a lead with two or three numbers is dialled one number at a time in Zoom Phone. Numbers the sheet put under an email column, and emails it put under Phone, are shown where they belong.
@@ -282,6 +284,7 @@ For example:
 - `20261027000100_longer_comments.sql` lets task comments, file comments and project messages be up to 100,000 characters (pasted meeting transcripts).
 - `20261027000200_setter_role.sql`, then `20261027000300_outreach.sql`, then `20261027000400_outreach_sweep_no_settings.sql` add appointment setters and Outreach (run them in that order, as separate queries).
 - `20261028000100_text_kit.sql` adds text kits (the Texts page).
+- `20261029000100_text_kit_assign.sql` lets admins hand out text kit leads.
 
 ---
 

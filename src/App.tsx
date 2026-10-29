@@ -91,7 +91,7 @@ export default function App() {
             <Route path="/sales/meetings" element={<Only roles={S}><MeetingsPage /></Only>} />
             <Route path="/sales/log" element={<Only roles={S}><ActivityPage /></Only>} />
             <Route path="/sales/analytics" element={<Only roles={S}><AnalyticsPage /></Only>} />
-            <Route path="/sales/texts" element={<Only roles={['sales', 'admin']}><TextsPage /></Only>} />
+            <Route path="/sales/texts" element={<Only roles={['sales', 'admin', 'setter']}><TextsPage /></Only>} />
             <Route path="/leaderboard" element={<Only roles={['admin', 'sales']}><LeaderboardPage /></Only>} />
 
             <Route path="/me/agent" element={<AgentPage />} />

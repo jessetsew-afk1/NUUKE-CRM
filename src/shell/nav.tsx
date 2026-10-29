@@ -47,10 +47,11 @@ export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
   if (role === 'sales' && ctx.outreach) {
     groups[0].items.push({ to: '/outreach', label: 'Outreach', icon: i(Mic) });
   }
-  if ((role === 'sales' || role === 'admin') && ctx.texts) {
+  if ((role === 'sales' || role === 'admin' || role === 'setter') && ctx.texts) {
     const sales = groups[0].items;
     const at = role === 'sales' ? sales.findIndex((x) => x.to === '/sales/meetings') : sales.length;
-    sales.splice(at, 0, { to: '/sales/texts', label: 'Texts', icon: i(MessageSquareText), badge: ctx.textsToSend });
+    // Setters work from a phone, so Texts sits in their bottom bar.
+    sales.splice(at, 0, { to: '/sales/texts', label: 'Texts', icon: i(MessageSquareText), badge: ctx.textsToSend, mobile: role === 'setter' });
   }
   if (ctx.techManager && role !== 'client' && role !== 'setter') {
     groups[0].items.push({ to: '/meetings/tech', label: 'Client meetings', short: 'Meetings', icon: i(Video) });

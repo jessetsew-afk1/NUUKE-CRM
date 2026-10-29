@@ -824,6 +824,32 @@ const faisal = await as('faisal@nuuke.test');
   const { data: back } = await zoya.c.rpc('text_kit_mark', { p_id: ids[1], p_status: 'reset' });
   ok(back.status === 'to_text' && !back.opted_out_at, 'Undo puts a lead back on To text');
   await service.from('text_kit').delete().in('id', ids);
+
+  // Handing leads to an appointment setter
+  const setterEmail = 'rules.setter@nuuke.test';
+  let setterId = (await service.from('profiles').select('id').eq('email', setterEmail).maybeSingle()).data?.id;
+  if (!setterId) {
+    const { data: u } = await service.auth.admin.createUser({ email: setterEmail, password: PASSWORD, email_confirm: true });
+    setterId = u.user.id;
+    await service.from('profiles').insert({ id: setterId, email: setterEmail, full_name: 'Rules Setter', role: 'setter' });
+  }
+  const setter = await as(setterEmail);
+  const { data: four } = await service.from('text_kit').insert([1, 2, 3, 4].map((n) => ({ ...row, kit: 'Rules assign', position: n }))).select('id, position');
+  const fourIds = four.map((r) => r.id);
+  await zoya.c.rpc('text_kit_mark', { p_id: four.find((r) => r.position === 4).id, p_status: 'texted' });
+  const { error: a1 } = await zoya.c.rpc('text_kit_assign', { p_to: setter.id, p_count: 2, p_from: zoya.id });
+  ok(!!a1, 'Only an admin can hand out texts');
+  const { data: moved } = await admin.c.rpc('text_kit_assign', { p_to: setter.id, p_count: 2, p_from: zoya.id });
+  const { data: hers } = await setter.c.from('text_kit').select('position, status').eq('kit', 'Rules assign').order('position');
+  ok(moved === 2 && hers.map((r) => r.position).join() === '2,3',
+    'Handing out moves the last leads still to text, never ones already texted', JSON.stringify(hers));
+  const { data: s1 } = await setter.c.rpc('text_kit_mark', { p_id: four.find((r) => r.position === 3).id, p_status: 'texted' });
+  const { data: zoyaLeft } = await zoya.c.from('text_kit').select('position').eq('kit', 'Rules assign');
+  ok(s1?.status === 'texted' && zoyaLeft.length === 2, 'A setter sees and ticks only the leads handed to them');
+  const umarC = await as('umar@nuuke.test');
+  const { error: a2 } = await admin.c.rpc('text_kit_assign', { p_to: umarC.id, p_count: 1, p_from: zoya.id });
+  ok(!!a2, 'Texts can only go to sales, setters or admins');
+  await service.from('text_kit').delete().in('id', fourIds);
 }
 
 // ---- clean up the clock-in so the demo starts fresh

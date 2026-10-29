@@ -50,9 +50,9 @@ export function Shell({ children }: { children: ReactNode }) {
   const outreach = role === 'sales' && !!profile?.id && settings.data?.outreach_closer_id === profile.id;
   const prospects = useProspects(role === 'setter');
   const outreachDue = role === 'setter' ? dueCount(prospects.data) : 0;
-  const kit = useTextKit(role === 'sales' || role === 'admin').data ?? [];
+  const kit = useTextKit(role === 'sales' || role === 'admin' || role === 'setter').data ?? [];
   const texts = kit.length > 0;
-  const textsToSend = role === 'sales' ? kit.filter((t) => t.status === 'to_text').length : 0;
+  const textsToSend = role === 'sales' || role === 'setter' ? kit.filter((t) => t.status === 'to_text').length : 0;
   const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager, games, projects: onProjects, payments, payDecide, outreach, outreachDue, texts, textsToSend }),
     [role, projectId, reviews, unreadCount, techManager, games, onProjects, payments, payDecide, outreach, outreachDue, texts, textsToSend]);
 
