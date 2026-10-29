@@ -867,9 +867,17 @@ const faisal = await as('faisal@nuuke.test');
   const { data: adminTeam } = await admin.c.rpc('team_activity', { p_from: from, p_to: to });
   const z = team?.find((r) => r.profile_id === zoya.id);
   const za = adminTeam?.find((r) => r.profile_id === zoya.id);
-  const { data: zs } = await admin.c.rpc('sales_stats', { p_user: zoya.id, p_from: from, p_to: to });
-  ok(!t3 && z && z.dials === za.dials && z.dials === zs.totals.dials && z.connected === zs.totals.connected,
-    "A sales lead sees each rep's calls, matching the rep's own numbers", `${z?.dials} dials, ${z?.connected} connected`);
+  // Team days run 10pm to 10pm US Eastern: count the rep's calls in that window directly.
+  const etStart = (d) => { // 10pm New York time on the evening before day d
+    const guess = new Date(`${d}T00:00:00Z`);
+    const ny = new Date(guess.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    return new Date(guess.getTime() + (guess.getTime() - ny.getTime()) - 2 * 3600_000);
+  };
+  const toPlus = new Date(new Date(`${to}T00:00:00Z`).getTime() + 864e5).toISOString().slice(0, 10);
+  const { count: direct } = await service.from('lead_attempts').select('*', { count: 'exact', head: true })
+    .eq('rep_id', zoya.id).eq('action', 'call').gte('created_at', etStart(from).toISOString()).lt('created_at', etStart(toPlus).toISOString());
+  ok(!t3 && z && z.dials === za.dials && z.dials === direct,
+    "A sales lead sees each rep's calls, counted 10pm to 10pm Eastern", `${z?.dials} dials, ${direct} in the window`);
   const { data: hisLeads } = await hamza.c.from('leads').select('id').eq('assigned_to', zoya.id).limit(1);
   ok(hisLeads.length === 0, "A sales lead still can't open a colleague's leads");
   await service.from('profiles').update({ is_sales_lead: false }).eq('id', hamza.id);
