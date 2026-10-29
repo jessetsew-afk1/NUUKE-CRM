@@ -3594,6 +3594,10 @@ export type Database = {
         Args: { p_name: string }
         Returns: number
       }
+      text_kit_assign: {
+        Args: { p_count: number; p_from: string; p_to: string }
+        Returns: number
+      }
       text_kit_mark: {
         Args: { p_id: number; p_status: string }
         Returns: {

@@ -50,6 +50,22 @@ export function localTime(tz: string, now = new Date()) {
   return { hour, label, ok: hour >= TEXT_FROM && hour < TEXT_UNTIL };
 }
 
+/** Hand an admin-chosen number of "to text" leads from one person to another. Returns how many moved. */
+export const assignTexts = (to: string, count: number, from: string) =>
+  rpc<number>('text_kit_assign', { p_to: to, p_count: count, p_from: from });
+
+/**
+ * The kits are written in Isaiah's voice. When someone else sends one it opens with
+ * their own name instead ("Ashley here, from Isaiah's team."), so nobody texts as Isaiah.
+ */
+export function signedMessage(message: string, sender: string | null | undefined) {
+  const first = (sender ?? '').trim().split(/\s+/)[0];
+  if (!first || /^isaiah$/i.test(first)) return message;
+  return message
+    .replace(/\bIsaiah here\./, `${first} here, from Isaiah's team.`)
+    .replace(/\bSoy Isaiah\./, `Soy ${first}, del equipo de Isaiah.`);
+}
+
 /** Zoom Phone's "new text" link: opens the Zoom app with the number in the To field. */
 export const zoomSmsHref = (phone: string) => `zoomphonesms://${phone}`;
 

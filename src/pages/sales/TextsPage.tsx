@@ -4,16 +4,17 @@
  * what happened. Only offered between 9am and 8pm in the lead's own time zone.
  */
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Ban, Check, Clock, Copy, History, MessageSquareText, Reply, RotateCcw, Search, Send, X } from 'lucide-react';
+import { Ban, Check, Clock, Copy, Gift, History, MessageSquareText, Reply, RotateCcw, Search, Send, X } from 'lucide-react';
 import { useAuth } from '@/app/auth';
 import { usePeople } from '@/data/common';
 import {
-  KIT_STATUS, TEXT_FROM, TEXT_UNTIL, localTime, prettyPhone, tidyAsk, useMarkText, useTextKit, versionStats, zoomSmsHref,
+  KIT_STATUS, TEXT_FROM, TEXT_UNTIL, assignTexts, localTime, prettyPhone, signedMessage, tidyAsk, useMarkText, useTextKit, versionStats, zoomSmsHref,
   type KitStatus, type KitText,
 } from '@/data/textKit';
 import { dayShort, pct } from '@/lib/format';
-import { Button, Chip, Empty, Input, PageHeader, Panel, Pill, Skeleton } from '@/ui/kit';
+import { Button, Chip, Empty, Input, PageHeader, Panel, Picker, Pill, Skeleton } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 
 const FILTERS: { key: KitStatus | 'all'; label: string }[] = [
@@ -71,15 +72,19 @@ export default function TextsPage() {
   const [filter, setFilter] = useState<KitStatus | 'all'>('to_text');
   const [zone, setZone] = useState<ZoneKey>('all');
   const [q, setQ] = useState('');
+  const [who, setWho] = useState<string>('all');
   const term = q.trim();
-  const all = rows.data ?? [];
+  const everyone = rows.data ?? [];
+  const isAdmin = profile?.role === 'admin';
+  // Admins see every kit; they can narrow it to one person's list.
+  const all = who === 'all' ? everyone : everyone.filter((r) => r.owner_id === who);
   const inStatus = all.filter((r) => filter === 'all' || r.status === filter);
   const inZone = (r: KitText, z: ZoneKey) => z === 'all' || (z === 'open' ? localTime(r.time_zone, now).ok : r.time_zone === z);
   const zones = [...new Set(all.map((r) => r.time_zone))].sort((a, b) => utcOffset(b, now) - utcOffset(a, now));
   // A search looks through every list, so a name is found whether or not they've been texted yet.
   const shown = term ? all.filter((r) => matches(r, term)) : inStatus.filter((r) => inZone(r, zone));
-  const owners = [...new Set(all.map((r) => r.owner_id))];
-  const ownerName = (id: string) => people.data?.find((p) => p.id === id)?.full_name ?? 'someone';
+  const owners = [...new Set(everyone.map((r) => r.owner_id))];
+  const ownerName = (id: string) => (id === profile?.id ? profile.full_name : people.data?.find((p) => p.id === id)?.full_name) ?? 'someone';
   const forOthers = owners.some((id) => id !== profile?.id);
   const kits = [...new Set(all.map((r) => r.kit))];
 
@@ -89,7 +94,7 @@ export default function TextsPage() {
         eyebrow={kits.length ? `${kits.join(' & ')} text kit` : 'Text kit'}
         title="Texts"
         sub={forOthers
-          ? `${all.length} leads for ${owners.map(ownerName).join(' and ')} to text from Zoom.`
+          ? `${everyone.length} leads for ${owners.map(ownerName).join(', ')} to text from Zoom.`
           : `${all.length} leads to text from Zoom, newest first. Send text copies the message and opens Zoom with their number in. Paste it, check it, send.`}
       />
 
@@ -103,6 +108,17 @@ export default function TextsPage() {
           </ul>
         </div>
       </Panel>
+
+      {isAdmin && <HandOut everyone={everyone} ownerName={ownerName} />}
+
+      {isAdmin && owners.length > 1 && (
+        <div className="scroll-x mb-3 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible" aria-label="Whose list">
+          <Chip active={who === 'all'} onClick={() => setWho('all')} count={everyone.length}>Everyone</Chip>
+          {owners.map((id) => (
+            <Chip key={id} active={who === id} onClick={() => setWho(id)} count={everyone.filter((r) => r.owner_id === id).length}>{ownerName(id)}</Chip>
+          ))}
+        </div>
+      )}
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
         {versionStats(all).map((v) => (
@@ -160,7 +176,7 @@ export default function TextsPage() {
       )}
       {rows.isLoading ? <Skeleton className="h-64" /> : shown.length ? (
         <div className="grid grid-cols-1 gap-3">
-          {shown.map((r) => <TextCard key={r.id} r={r} now={now} />)}
+          {shown.map((r) => <TextCard key={r.id} r={r} now={now} sender={ownerName(r.owner_id)} owner={isAdmin && owners.length > 1 ? ownerName(r.owner_id) : null} />)}
         </div>
       ) : (
         <Empty
@@ -173,7 +189,55 @@ export default function TextsPage() {
   );
 }
 
-function TextCard({ r, now }: { r: KitText; now: Date }) {
+/** Admins hand leads still to text from one person to another, e.g. 50 to each setter. */
+function HandOut({ everyone, ownerName }: { everyone: KitText[]; ownerName: (id: string) => string }) {
+  const people = usePeople();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const toText = (id: string) => everyone.filter((r) => r.owner_id === id && r.status === 'to_text').length;
+  const givers = [...new Set(everyone.map((r) => r.owner_id))].filter((id) => toText(id) > 0);
+  const takers = (people.data ?? []).filter((p) => p.is_active && (p.role === 'setter' || p.role === 'sales'));
+  const [from, setFrom] = useState<string | null>(null);
+  const [to, setTo] = useState<string | null>(null);
+  const [count, setCount] = useState('50');
+  const [busy, setBusy] = useState(false);
+  const giver = from ?? [...givers].sort((a, b) => toText(b) - toText(a))[0] ?? null;
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  const give = async () => {
+    if (!giver || !to || !n) return;
+    setBusy(true);
+    try {
+      const moved = await assignTexts(to, n, giver);
+      await qc.invalidateQueries({ queryKey: ['text-kit'] });
+      toast({ title: `Gave ${moved} ${moved === 1 ? 'lead' : 'leads'} to ${ownerName(to)}`, body: 'They see them under Texts.', tone: 'success' });
+    } catch (e) {
+      toast({ title: 'Not handed out', body: (e as Error).message, tone: 'danger' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!givers.length) return null;
+  return (
+    // Above the panels below it, so the person picker's menu isn't hidden behind them.
+    <Panel className="relative z-10 mb-4">
+      <div className="mb-3 flex items-center gap-2 text-[14px] font-bold"><Gift className="size-4 text-iris" /> Hand out leads</div>
+      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_110px_auto] sm:items-end">
+        <Picker label="From" value={giver} onChange={setFrom}
+          options={givers.map((id) => ({ value: id, label: `${ownerName(id)} · ${toText(id)} to text` }))} />
+        <Picker label="To" value={to} onChange={setTo} placeholder="Choose a person"
+          options={takers.filter((p) => p.id !== giver).map((p) => ({ value: p.id, label: `${p.full_name}${p.role === 'setter' ? ' (setter)' : ''}` }))} />
+        <Input label="How many" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value.replace(/\D/g, '').slice(0, 3))} />
+        <Button variant="primary" loading={busy} disabled={!giver || !to || !n} onClick={give}>Give {n || ''}</Button>
+      </div>
+      <p className="text-3 mt-2 text-[12.5px]">
+        Moves the last {n || 'N'} leads in {giver ? ownerName(giver) : 'their'}'s To text list (the newest batch added). Texted and replied leads stay put.
+        Their messages open with their own name, e.g. "Ashley here, from Isaiah's team."
+      </p>
+    </Panel>
+  );
+}
+
+function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: string; owner: string | null }) {
   const toast = useToast();
   const mark = useMarkText();
   const [busy, setBusy] = useState<string | null>(null);
@@ -182,6 +246,7 @@ function TextCard({ r, now }: { r: KitText; now: Date }) {
   const t = localTime(r.time_zone, now);
   const status = r.status as KitStatus;
   const ask = tidyAsk(r.asked_for);
+  const message = signedMessage(r.message, sender);
 
   const copy = (text: string, title: string) => {
     void navigator.clipboard?.writeText(text).then(
@@ -211,6 +276,7 @@ function TextCard({ r, now }: { r: KitText; now: Date }) {
             <h3 className="truncate text-[16px] font-bold">{r.name}</h3>
             <Pill tone={r.version === 'A' ? 'info' : 'iris'}>{r.version}</Pill>
             {status !== 'to_text' && <Pill tone={KIT_STATUS[status].tone}>{KIT_STATUS[status].label}</Pill>}
+            {owner && <Pill tone="neutral">{owner.split(/\s+/)[0]}</Pill>}
           </div>
           <div className="text-2 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]">
             <button className="tabular font-semibold underline-offset-2 hover:underline" title="Copy number"
@@ -235,12 +301,12 @@ function TextCard({ r, now }: { r: KitText; now: Date }) {
       )}
       {more && r.tz_note && <p className="text-3 mt-1 text-[12px]">* {r.tz_note}</p>}
 
-      <div className="fill mt-3 whitespace-pre-wrap rounded-2xl p-3.5 text-[14px] leading-relaxed">{r.message}</div>
+      <div className="fill mt-3 whitespace-pre-wrap rounded-2xl p-3.5 text-[14px] leading-relaxed">{message}</div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {status === 'to_text' && (t.ok ? (
           <a href={zoomSmsHref(r.phone)}
-            onClick={() => { copy(r.message, 'Message copied. Paste it in Zoom.'); setOpened(true); }}
+            onClick={() => { copy(message, 'Message copied. Paste it in Zoom.'); setOpened(true); }}
             className="inline-flex h-10 items-center gap-2 rounded-[14px] bg-[#0B5CFF] px-4 text-sm font-semibold text-white shadow-[0_8px_24px_-10px_rgba(11,92,255,0.8)] transition hover:brightness-110">
             <Send className="size-4" /> Send text
           </a>
@@ -248,7 +314,7 @@ function TextCard({ r, now }: { r: KitText; now: Date }) {
           <Button disabled icon={<Clock className="size-4" />}>Opens at {hourLabel(TEXT_FROM)} their time</Button>
         ))}
         {status === 'to_text' && (
-          <Button size="md" icon={<Copy className="size-4" />} onClick={() => copy(r.message, 'Message copied')}>Copy message</Button>
+          <Button size="md" icon={<Copy className="size-4" />} onClick={() => copy(message, 'Message copied')}>Copy message</Button>
         )}
         {status === 'to_text' && (
           <Button variant={opened ? 'success' : 'ghost'} loading={busy === 'texted'} icon={<Check className="size-4" />}
