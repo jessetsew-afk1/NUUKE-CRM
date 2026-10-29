@@ -53,8 +53,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const kit = useTextKit(role === 'sales' || role === 'admin' || role === 'setter').data ?? [];
   const texts = kit.length > 0;
   const textsToSend = role === 'sales' || role === 'setter' ? kit.filter((t) => t.status === 'to_text').length : 0;
-  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager, games, projects: onProjects, payments, payDecide, outreach, outreachDue, texts, textsToSend }),
-    [role, projectId, reviews, unreadCount, techManager, games, onProjects, payments, payDecide, outreach, outreachDue, texts, textsToSend]);
+  const groups = useMemo(() => navFor(role, { projectId, reviews, unread: unreadCount, techManager, games, projects: onProjects, payments, payDecide, outreach, outreachDue, texts, textsToSend, salesLead: !!profile?.is_sales_lead }),
+    [role, projectId, reviews, unreadCount, techManager, games, onProjects, payments, payDecide, outreach, outreachDue, texts, textsToSend, profile?.is_sales_lead]);
 
   return (
     <div className="relative z-10 min-h-dvh">

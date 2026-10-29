@@ -20,6 +20,8 @@ export interface NavContext {
   outreach?: boolean; outreachDue?: number;
   /** Has a text kit (leads picked for them to text from Zoom); `textsToSend` = still to text. */
   texts?: boolean; textsToSend?: number;
+  /** A salesperson an admin made a sales lead: they get the Team page. */
+  salesLead?: boolean;
 }
 export interface NavGroup { label: string; items: NavItem[] }
 
@@ -52,6 +54,9 @@ export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
     const at = role === 'sales' ? sales.findIndex((x) => x.to === '/sales/meetings') : sales.length;
     // Setters work from a phone, so Texts sits in their bottom bar.
     sales.splice(at, 0, { to: '/sales/texts', label: 'Texts', icon: i(MessageSquareText), badge: ctx.textsToSend, mobile: role === 'setter' });
+  }
+  if (role === 'sales' && ctx.salesLead) {
+    groups[0].items.push({ to: '/team', label: 'Team', icon: i(Users) });
   }
   if (ctx.techManager && role !== 'client' && role !== 'setter') {
     groups[0].items.push({ to: '/meetings/tech', label: 'Client meetings', short: 'Meetings', icon: i(Video) });
@@ -96,6 +101,7 @@ function baseNav(role: Role, ctx: NavContext): NavGroup[] {
           items: [
             { to: '/admin', label: 'Overview', icon: i(LayoutDashboard), end: true, mobile: true },
             { to: '/admin/sales', label: 'Sales floor', short: 'Sales', icon: i(Gauge), mobile: true },
+            { to: '/team', label: 'Calls & texts', icon: i(Users) },
             { to: '/admin/meetings', label: 'Meetings calendar', short: 'Meetings', icon: i(CalendarDays) },
             { to: '/projects', label: 'Projects', icon: i(FolderKanban), mobile: true, badge: ctx.unread },
             { to: '/admin/leads', label: 'Leads & import', short: 'Leads', icon: i(FileSpreadsheet) },

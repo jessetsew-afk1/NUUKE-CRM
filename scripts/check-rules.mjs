@@ -852,6 +852,29 @@ const faisal = await as('faisal@nuuke.test');
   await service.from('text_kit').delete().in('id', fourIds);
 }
 
+// ---- sales leads watch the team
+{
+  const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+  const from = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const to = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+  const { error: t1 } = await zoya.c.rpc('team_activity', { p_from: from, p_to: to });
+  ok(!!t1, "A rep who isn't a sales lead can't see the team's activity");
+  const { error: t2 } = await zoya.c.from('profiles').update({ is_sales_lead: true }).eq('id', zoya.id);
+  const { data: still } = await service.from('profiles').select('is_sales_lead').eq('id', zoya.id).single();
+  ok(!!t2 && !still.is_sales_lead, 'A rep cannot make themselves a sales lead');
+  await service.from('profiles').update({ is_sales_lead: true }).eq('id', hamza.id);
+  const { data: team, error: t3 } = await hamza.c.rpc('team_activity', { p_from: from, p_to: to });
+  const { data: adminTeam } = await admin.c.rpc('team_activity', { p_from: from, p_to: to });
+  const z = team?.find((r) => r.profile_id === zoya.id);
+  const za = adminTeam?.find((r) => r.profile_id === zoya.id);
+  const { data: zs } = await admin.c.rpc('sales_stats', { p_user: zoya.id, p_from: from, p_to: to });
+  ok(!t3 && z && z.dials === za.dials && z.dials === zs.totals.dials && z.connected === zs.totals.connected,
+    "A sales lead sees each rep's calls, matching the rep's own numbers", `${z?.dials} dials, ${z?.connected} connected`);
+  const { data: hisLeads } = await hamza.c.from('leads').select('id').eq('assigned_to', zoya.id).limit(1);
+  ok(hisLeads.length === 0, "A sales lead still can't open a colleague's leads");
+  await service.from('profiles').update({ is_sales_lead: false }).eq('id', hamza.id);
+}
+
 // ---- clean up the clock-in so the demo starts fresh
 await zoya.c.rpc('clock_out');
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');
