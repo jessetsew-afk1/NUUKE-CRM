@@ -13,6 +13,9 @@ import { useTeamActivity, type TeamActivity } from '@/data/team';
 import { BarList, ColumnChart } from '@/ui/charts';
 import { Empty, PageHeader, Panel, PanelHeader, Pill, Segmented, Skeleton, Stat, toneColor } from '@/ui/kit';
 import { addDaysISO, ago, count, localISO, pct } from '@/lib/format';
+
+/** The Team page's days run 10pm to 10pm US Eastern: from 10pm ET it's already tomorrow. */
+const teamToday = () => localISO(new Date(Date.now() + 2 * 3600_000), 'America/New_York');
 import type { Tone } from '@/ui/kit';
 
 type Range = 'today' | 'yesterday' | 'week' | 'month';
@@ -24,7 +27,7 @@ export default function TeamPage() {
   const allowed = profile?.role === 'admin' || !!profile?.is_sales_lead;
   const [range, setRange] = useState<Range>('today');
   const [open, setOpen] = useState<string | null>(null);
-  const today = localISO();
+  const today = teamToday();
   const [from, to] = useMemo(() => ({
     today: [today, today],
     yesterday: [addDaysISO(today, -1), addDaysISO(today, -1)],
@@ -76,7 +79,7 @@ export default function TeamPage() {
         </div>
       )}
       <p className="text-3 mt-4 text-[12px]">
-        Days run on the company clock, the same days the dialer counts. Texts count when the rep ticks Texted (or Replied) on the Texts page.
+        Days run 10pm to 10pm Eastern, so a new day starts at 10pm ET. Texts count when the rep ticks Texted (or Replied) on the Texts page.
       </p>
     </>
   );
