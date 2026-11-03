@@ -19,6 +19,8 @@ import {
 import { dayShort, localISO, pct } from '@/lib/format';
 import { Button, Chip, Empty, Input, PageHeader, Panel, Picker, Pill, Skeleton } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
+import { useZoomLink } from '@/lib/zoomLaunch';
+import { Playbook, ReplyAssistant } from './ReplyAssistant';
 
 type View = KitStatus | 'all' | 'due';
 
@@ -87,7 +89,9 @@ export default function TextsPage() {
   // Admins see every kit; they can narrow it to one person's list.
   const all = who === 'all' ? everyone : everyone.filter((r) => r.owner_id === who);
   const inView = (r: KitText, v: View) => v === 'all' || (v === 'due' ? !!nextTouch(r, now)?.due : r.status === v);
-  const inStatus = all.filter((r) => inView(r, filter));
+  // The card someone is replying on stays put, even once it moves to Replied.
+  const [replyingOn, setReplyingOn] = useState<number | null>(null);
+  const inStatus = all.filter((r) => inView(r, filter) || r.id === replyingOn);
   // Follow-ups are time-sensitive, so open on them when any are due.
   const opened = useRef(false);
   useEffect(() => {
@@ -98,7 +102,7 @@ export default function TextsPage() {
   const inZone = (r: KitText, z: ZoneKey) => z === 'all' || (z === 'open' ? localTime(r.time_zone, now).ok : r.time_zone === z);
   const zones = [...new Set(all.map((r) => r.time_zone))].sort((a, b) => utcOffset(b, now) - utcOffset(a, now));
   // A search looks through every list, so a name is found whether or not they've been texted yet.
-  const shown = term ? all.filter((r) => matches(r, term)) : inStatus.filter((r) => inZone(r, zone));
+  const shown = term ? all.filter((r) => matches(r, term)) : inStatus.filter((r) => inZone(r, zone) || r.id === replyingOn);
   const owners = [...new Set(everyone.map((r) => r.owner_id))];
   const ownerName = (id: string) => (id === profile?.id ? profile.full_name : people.data?.find((p) => p.id === id)?.full_name) ?? 'someone';
   const forOthers = owners.some((id) => id !== profile?.id);
@@ -120,6 +124,7 @@ export default function TextsPage() {
           <ul className="text-2 grid gap-1 text-[13.5px]">
             <li><b className="text-[color:var(--text)]">One at a time.</b> Tap Send text, press <b className="text-[color:var(--text)]">Ctrl+V</b> (⌘V on a Mac, or hold and Paste on a phone) in Zoom, then send.</li>
             <li>Only between {hourLabel(TEXT_FROM)} and {hourLabel(TEXT_UNTIL)} their time. The button waits outside those hours.</li>
+            <li>Got a reply? Tap <b className="text-[color:var(--text)]">They replied</b>, paste their message, and you get a suggested answer to send back.</li>
             <li>Zoom adds the opt-out line. If they reply STOP or "no", tick <b className="text-[color:var(--text)]">Opted out</b> and never text them again.</li>
             <li>No answer? A <b className="text-[color:var(--text)]">2nd text</b> shows up under Follow-ups due {FOLLOWUP_GAP_DAYS} days later, then a 3rd. Anyone who replied or opted out gets no more.</li>
           </ul>
@@ -128,6 +133,7 @@ export default function TextsPage() {
 
       {isAdmin && <HandOut everyone={everyone} ownerName={ownerName} />}
       {isAdmin && everyone.length > 0 && <FollowUps everyone={everyone} ownerName={ownerName} />}
+      {isAdmin && <Playbook />}
 
       {isAdmin && owners.length > 1 && (
         <div className="scroll-x mb-3 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible" aria-label="Whose list">
@@ -194,7 +200,8 @@ export default function TextsPage() {
       )}
       {rows.isLoading ? <Skeleton className="h-64" /> : shown.length ? (
         <div className="grid grid-cols-1 gap-3">
-          {shown.map((r) => <TextCard key={r.id} r={r} now={now} sender={ownerName(r.owner_id)} owner={isAdmin && owners.length > 1 ? ownerName(r.owner_id) : null} />)}
+          {shown.map((r) => <TextCard key={r.id} r={r} now={now} sender={ownerName(r.owner_id)} owner={isAdmin && owners.length > 1 ? ownerName(r.owner_id) : null}
+            onReplying={(open) => setReplyingOn(open ? r.id : null)} />)}
         </div>
       ) : (
         <Empty
@@ -336,12 +343,16 @@ function FollowUps({ everyone, ownerName }: { everyone: KitText[]; ownerName: (i
   );
 }
 
-function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: string; owner: string | null }) {
+function TextCard({ r, now, sender, owner, onReplying }: {
+  r: KitText; now: Date; sender: string; owner: string | null; onReplying: (open: boolean) => void;
+}) {
   const toast = useToast();
   const mark = useMarkText();
   const [busy, setBusy] = useState<string | null>(null);
   const [opened, setOpened] = useState(false);
   const [more, setMore] = useState(false);
+  const [replying, setReplyingState] = useState(false);
+  const setReplying = (open: boolean) => { setReplyingState(open); onReplying(open); };
   const t = localTime(r.time_zone, now);
   const status = r.status as KitStatus;
   const ask = tidyAsk(r.asked_for);
@@ -353,6 +364,7 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
   const sent = touchesSent(r);
   const undoLast = sent > 1 && status === 'texted' ? ORDINAL[sent as 2 | 3] : null;
 
+  const zoomLink = useZoomLink();
   const copy = (text: string, title: string) => {
     void navigator.clipboard?.writeText(text).then(
       () => toast({ title, tone: 'success', duration: 1800 }),
@@ -425,7 +437,7 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {status === 'to_text' && (t.ok ? (
           <a href={zoomSmsHref(r.phone)}
-            onClick={() => { copy(message, 'Message copied. Paste it in Zoom.'); setOpened(true); }}
+            onClick={() => { copy(message, 'Message copied. Paste it in Zoom.'); setOpened(true); zoomLink('text', prettyPhone(r.phone)); }}
             className="inline-flex h-10 items-center gap-2 rounded-[14px] bg-[#0B5CFF] px-4 text-sm font-semibold text-white shadow-[0_8px_24px_-10px_rgba(11,92,255,0.8)] transition hover:brightness-110">
             <Send className="size-4" /> Send text
           </a>
@@ -441,7 +453,7 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
         )}
         {followUpDue && (t.ok ? (
           <a href={zoomSmsHref(r.phone)}
-            onClick={() => { copy(message, 'Message copied. Paste it in Zoom.'); setOpened(true); }}
+            onClick={() => { copy(message, 'Message copied. Paste it in Zoom.'); setOpened(true); zoomLink('text', prettyPhone(r.phone)); }}
             className="inline-flex h-10 items-center gap-2 rounded-[14px] bg-[#0B5CFF] px-4 text-sm font-semibold text-white shadow-[0_8px_24px_-10px_rgba(11,92,255,0.8)] transition hover:brightness-110">
             <Send className="size-4" /> Send {ORDINAL[next!.touch]} text
           </a>
@@ -457,8 +469,10 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
             {opened ? `Sent it? Tick ${ORDINAL[next!.touch]} text` : `${ORDINAL[next!.touch]} text sent`}
           </Button>
         )}
-        {status === 'texted' && (
-          <Button variant="ghost" loading={busy === 'replied'} icon={<Reply className="size-4" />} onClick={() => set('replied', 'Marked replied')}>Replied</Button>
+        {(status === 'texted' || status === 'replied') && !replying && (
+          <Button variant={status === 'replied' ? 'iris' : 'ghost'} icon={<Reply className="size-4" />} onClick={() => setReplying(true)}>
+            {status === 'replied' ? 'Reply' : 'They replied'}
+          </Button>
         )}
         {status !== 'opted_out' && status !== 'to_text' && (
           <Button variant="ghost" loading={busy === 'opted_out'} icon={<Ban className="size-4" />} onClick={() => set('opted_out', 'Opted out. Never text them again.')}>Opted out</Button>
@@ -469,6 +483,7 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
           </Button>
         )}
       </div>
+      {replying && <ReplyAssistant r={r} sender={sender} onClose={() => setReplying(false)} />}
     </Panel>
   );
 }
