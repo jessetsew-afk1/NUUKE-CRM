@@ -6,7 +6,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/app/auth';
 import { must, rpc, supabase } from '@/lib/supabase';
-import type { Database } from '@/lib/database.types';
+import type { Database, Json } from '@/lib/database.types';
 import type { Tone } from '@/ui/kit';
 
 export type KitText = Database['public']['Tables']['text_kit']['Row'];
@@ -34,9 +34,33 @@ export function useTextKit(enabled = true) {
   });
 }
 
+/** Follow-ups go out this many days after the text before, if they still haven't answered. */
+export const FOLLOWUP_GAP_DAYS = 3;
+
+export type Touch = 2 | 3;
+
+/**
+ * The follow-up that comes next for someone who hasn't answered: which one, its words,
+ * and when it's due. Null when they replied, opted out, had all three, or none is written yet.
+ */
+export function nextTouch(r: KitText, now = new Date()) {
+  if (r.status !== 'texted' || !r.texted_at) return null;
+  const step = (touch: Touch, message: string | null, after: string) => {
+    if (!message) return null;
+    const dueAt = new Date(new Date(after).getTime() + FOLLOWUP_GAP_DAYS * 86_400_000);
+    return { touch, message, dueAt, due: dueAt <= now };
+  };
+  if (!r.touch2_at) return step(2, r.followup_2, r.texted_at);
+  if (!r.touch3_at) return step(3, r.followup_3, r.touch2_at);
+  return null;
+}
+
+/** How many texts they've had so far (1 to 3). */
+export const touchesSent = (r: KitText) => (r.texted_at ? 1 : 0) + (r.touch2_at ? 1 : 0) + (r.touch3_at ? 1 : 0);
+
 export function useMarkText() {
   const qc = useQueryClient();
-  return async (id: number, status: KitStatus | 'reset') => {
+  return async (id: number, status: KitStatus | 'reset' | `touch${Touch}`) => {
     await rpc('text_kit_mark', { p_id: id, p_status: status });
     await qc.invalidateQueries({ queryKey: ['text-kit'] });
   };
@@ -63,7 +87,50 @@ export function signedMessage(message: string, sender: string | null | undefined
   if (!first || /^isaiah$/i.test(first)) return message;
   return message
     .replace(/\bIsaiah here\./, `${first} here, from Isaiah's team.`)
-    .replace(/\bSoy Isaiah\./, `Soy ${first}, del equipo de Isaiah.`);
+    .replace(/\bSoy Isaiah\./, `Soy ${first}, del equipo de Isaiah.`)
+    // Follow-ups word it more loosely: "Isaiah here again", "it's Isaiah", "- Isaiah".
+    .replace(/\bIsaiah here\b/g, `${first} here`)
+    .replace(/\b(it's|it is|this is|soy) Isaiah\b/gi, `$1 ${first}`)
+    .replace(/^(\s*[-–—~]\s*)Isaiah\s*$/gm, `$1${first}`);
+}
+
+/* ------------------------------------------------------------------ follow-up sheets */
+/** Column headers of the follow-up sheet; the upload finds columns by these names. */
+export const FOLLOWUP_COLUMNS = [
+  'Text ID', 'Name', 'Phone', 'Sent by', 'Status', 'First text sent', 'Bark post date', 'What they asked for',
+  'First message', 'Follow-up 2', 'Follow-up 3', 'Said no',
+] as const;
+
+/**
+ * Everyone who could still get a follow-up (not replied, not opted out), with what they
+ * asked for and the first text, for a bot to write the 2nd and 3rd texts. Follow-ups
+ * already written are filled in, so the sheet can go back and forth.
+ */
+export function followupSheet(rows: KitText[], ownerName: (id: string) => string, onlyMissing: boolean) {
+  const open = rows
+    .filter((r) => r.status === 'to_text' || r.status === 'texted')
+    .filter((r) => !onlyMissing || !r.followup_2 || !r.followup_3)
+    .sort((a, b) => (a.texted_at ? 0 : 1) - (b.texted_at ? 0 : 1) || (a.texted_at ?? '').localeCompare(b.texted_at ?? '') || a.position - b.position);
+  return open.map((r) => [
+    r.id, r.name, prettyPhone(r.phone), ownerName(r.owner_id), r.status === 'texted' ? 'Texted' : 'Not texted yet',
+    r.texted_at?.slice(0, 10) ?? '', r.posted_on ?? '', tidyAsk(r.asked_for), r.message, r.followup_2 ?? '', r.followup_3 ?? '', '',
+  ]);
+}
+
+export interface FollowupRow { id?: string; phone?: string; followup_2?: string; followup_3?: string; said_no?: boolean }
+export interface FollowupResult { matched: number; written: number; said_no: number; not_found: string[] }
+
+/** Save follow-ups from a filled sheet, a thousand rows at a time. Admin only. */
+export async function loadFollowups(rows: FollowupRow[]) {
+  const total: FollowupResult = { matched: 0, written: 0, said_no: 0, not_found: [] };
+  for (let i = 0; i < rows.length; i += 1000) {
+    const r = await rpc<FollowupResult>('text_kit_followups', { p_rows: rows.slice(i, i + 1000) as unknown as Json });
+    total.matched += r.matched;
+    total.written += r.written;
+    total.said_no += r.said_no;
+    total.not_found.push(...r.not_found);
+  }
+  return total;
 }
 
 /** Zoom Phone's "new text" link: opens the Zoom app with the number in the To field. */

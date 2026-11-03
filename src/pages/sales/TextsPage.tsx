@@ -3,21 +3,27 @@
  * new Zoom Phone text with their number already in; they paste, check, send, then tick
  * what happened. Only offered between 9am and 8pm in the lead's own time zone.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Ban, Check, Clock, Copy, Gift, History, MessageSquareText, Reply, RotateCcw, Search, Send, X } from 'lucide-react';
+import Papa from 'papaparse';
+import { Ban, Check, Clock, Copy, Download, Gift, History, MessageSquareText, Repeat, Reply, RotateCcw, Search, Send, Upload, X } from 'lucide-react';
 import { useAuth } from '@/app/auth';
 import { usePeople } from '@/data/common';
+import { readWorkbook, tableOf, text } from '@/admin/workbook';
 import {
-  KIT_STATUS, TEXT_FROM, TEXT_UNTIL, assignTexts, localTime, prettyPhone, signedMessage, tidyAsk, useMarkText, useTextKit, versionStats, zoomSmsHref,
-  type KitStatus, type KitText,
+  FOLLOWUP_COLUMNS, FOLLOWUP_GAP_DAYS, KIT_STATUS, TEXT_FROM, TEXT_UNTIL, assignTexts, followupSheet, loadFollowups, localTime, nextTouch, prettyPhone,
+  signedMessage, tidyAsk, touchesSent, useMarkText, useTextKit, versionStats, zoomSmsHref,
+  type FollowupRow, type KitStatus, type KitText,
 } from '@/data/textKit';
-import { dayShort, pct } from '@/lib/format';
+import { dayShort, localISO, pct } from '@/lib/format';
 import { Button, Chip, Empty, Input, PageHeader, Panel, Picker, Pill, Skeleton } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 
-const FILTERS: { key: KitStatus | 'all'; label: string }[] = [
+type View = KitStatus | 'all' | 'due';
+
+const FILTERS: { key: View; label: string }[] = [
+  { key: 'due', label: 'Follow-ups due' },
   { key: 'to_text', label: 'To text' },
   { key: 'texted', label: 'Texted' },
   { key: 'replied', label: 'Replied' },
@@ -36,6 +42,8 @@ function useMinute() {
   }, []);
   return now;
 }
+
+const ORDINAL = { 2: '2nd', 3: '3rd' } as const;
 
 const hourLabel = (h: number) => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
 
@@ -69,7 +77,7 @@ export default function TextsPage() {
   const rows = useTextKit();
   const people = usePeople();
   const now = useMinute();
-  const [filter, setFilter] = useState<KitStatus | 'all'>('to_text');
+  const [filter, setFilter] = useState<View>('to_text');
   const [zone, setZone] = useState<ZoneKey>('all');
   const [q, setQ] = useState('');
   const [who, setWho] = useState<string>('all');
@@ -78,7 +86,15 @@ export default function TextsPage() {
   const isAdmin = profile?.role === 'admin';
   // Admins see every kit; they can narrow it to one person's list.
   const all = who === 'all' ? everyone : everyone.filter((r) => r.owner_id === who);
-  const inStatus = all.filter((r) => filter === 'all' || r.status === filter);
+  const inView = (r: KitText, v: View) => v === 'all' || (v === 'due' ? !!nextTouch(r, now)?.due : r.status === v);
+  const inStatus = all.filter((r) => inView(r, filter));
+  // Follow-ups are time-sensitive, so open on them when any are due.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current || !rows.data) return;
+    opened.current = true;
+    if (rows.data.some((r) => nextTouch(r)?.due)) setFilter('due');
+  }, [rows.data]);
   const inZone = (r: KitText, z: ZoneKey) => z === 'all' || (z === 'open' ? localTime(r.time_zone, now).ok : r.time_zone === z);
   const zones = [...new Set(all.map((r) => r.time_zone))].sort((a, b) => utcOffset(b, now) - utcOffset(a, now));
   // A search looks through every list, so a name is found whether or not they've been texted yet.
@@ -105,11 +121,13 @@ export default function TextsPage() {
             <li><b className="text-[color:var(--text)]">One at a time.</b> Tap Send text, press <b className="text-[color:var(--text)]">Ctrl+V</b> (⌘V on a Mac, or hold and Paste on a phone) in Zoom, then send.</li>
             <li>Only between {hourLabel(TEXT_FROM)} and {hourLabel(TEXT_UNTIL)} their time. The button waits outside those hours.</li>
             <li>Zoom adds the opt-out line. If they reply STOP or "no", tick <b className="text-[color:var(--text)]">Opted out</b> and never text them again.</li>
+            <li>No answer? A <b className="text-[color:var(--text)]">2nd text</b> shows up under Follow-ups due {FOLLOWUP_GAP_DAYS} days later, then a 3rd. Anyone who replied or opted out gets no more.</li>
           </ul>
         </div>
       </Panel>
 
       {isAdmin && <HandOut everyone={everyone} ownerName={ownerName} />}
+      {isAdmin && everyone.length > 0 && <FollowUps everyone={everyone} ownerName={ownerName} />}
 
       {isAdmin && owners.length > 1 && (
         <div className="scroll-x mb-3 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible" aria-label="Whose list">
@@ -152,7 +170,7 @@ export default function TextsPage() {
       <div className={clsx('scroll-x mb-3 flex gap-2 overflow-x-auto pb-1', term && 'opacity-50')}>
         {FILTERS.map((f) => (
           <Chip key={f.key} active={!term && filter === f.key} onClick={() => { setQ(''); setFilter(f.key); }}
-            count={all.filter((r) => (f.key === 'all' || r.status === f.key) && inZone(r, zone)).length}>{f.label}</Chip>
+            count={all.filter((r) => inView(r, f.key) && inZone(r, zone)).length}>{f.label}</Chip>
         ))}
       </div>
 
@@ -180,10 +198,11 @@ export default function TextsPage() {
         </div>
       ) : (
         <Empty
-          title={term ? 'Nobody by that name' : zone !== 'all' && inStatus.length ? (zone === 'open' ? 'Nobody is in texting hours right now' : `Nobody here in ${zoneName(zone)}`) : filter === 'to_text' ? 'Everyone has been texted' : 'Nobody here'}
+          title={term ? 'Nobody by that name' : zone !== 'all' && inStatus.length ? (zone === 'open' ? 'Nobody is in texting hours right now' : `Nobody here in ${zoneName(zone)}`) : filter === 'to_text' ? 'Everyone has been texted' : filter === 'due' ? 'No follow-ups due' : 'Nobody here'}
           body={term ? 'Try part of their first or last name, or their number.'
             : zone !== 'all' && inStatus.length ? `Texting opens at ${hourLabel(TEXT_FROM)} in each lead's own time zone. Try another zone.`
-            : filter === 'to_text' ? 'Check Texted for anyone who replies.' : undefined} />
+            : filter === 'to_text' ? 'Check Texted for anyone who replies.'
+            : filter === 'due' ? `A 2nd text comes due ${FOLLOWUP_GAP_DAYS} days after the 1st, and a 3rd ${FOLLOWUP_GAP_DAYS} days after that, for anyone who hasn't answered.` : undefined} />
       )}
     </div>
   );
@@ -237,6 +256,86 @@ function HandOut({ everyone, ownerName }: { everyone: KitText[]; ownerName: (id:
   );
 }
 
+/** Find a column by any of these header names. */
+const col = (header: string[], ...names: RegExp[]) => header.findIndex((h) => names.some((n) => n.test(h.trim())));
+
+/**
+ * Admins hand the follow-up sheet to a bot to write the 2nd and 3rd texts, then upload
+ * it back. A "Said no" column (yes / y / x) opts those people out so they're never texted again.
+ */
+function FollowUps({ everyone, ownerName }: { everyone: KitText[]; ownerName: (id: string) => string }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const open = everyone.filter((r) => r.status === 'to_text' || r.status === 'texted');
+  const written = open.filter((r) => r.followup_2 && r.followup_3).length;
+  const missing = open.length - written;
+  const due = everyone.filter((r) => nextTouch(r)?.due).length;
+
+  const download = (onlyMissing: boolean) => {
+    const csv = Papa.unparse({ fields: [...FOLLOWUP_COLUMNS], data: followupSheet(everyone, ownerName, onlyMissing) });
+    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `NUUKE text follow-ups ${localISO()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    try {
+      const tabs = await readWorkbook(file);
+      const { header, body } = tabs.map(tableOf).sort((a, b) => b.body.length - a.body.length)[0] ?? { header: [], body: [] };
+      const id = col(header, /^text id$/i, /^id$/i);
+      const phone = col(header, /phone/i);
+      const f2 = col(header, /follow.?up ?2/i, /^2nd/i, /second/i);
+      const f3 = col(header, /follow.?up ?3/i, /^3rd/i, /third/i);
+      const no = col(header, /said no/i, /^no$/i);
+      if ((id < 0 && phone < 0) || (f2 < 0 && f3 < 0 && no < 0)) {
+        throw new Error('Keep the Text ID (or Phone) column, and a Follow-up 2, Follow-up 3 or Said no column.');
+      }
+      const rows: FollowupRow[] = body.map((r) => ({
+        id: id >= 0 ? text(r[id]) : undefined,
+        phone: phone >= 0 ? text(r[phone]) : undefined,
+        followup_2: f2 >= 0 ? text(r[f2]) : undefined,
+        followup_3: f3 >= 0 ? text(r[f3]) : undefined,
+        said_no: no >= 0 && /^(y|yes|x|true|1|said no)$/i.test(text(r[no])),
+      })).filter((r) => r.followup_2 || r.followup_3 || r.said_no);
+      if (!rows.length) throw new Error('No follow-ups or "said no" marks in that sheet.');
+      const res = await loadFollowups(rows);
+      await qc.invalidateQueries({ queryKey: ['text-kit'] });
+      toast({
+        title: `Saved follow-ups for ${res.written} ${res.written === 1 ? 'person' : 'people'}`,
+        body: [res.said_no && `${res.said_no} marked as said no.`, res.not_found.length && `${res.not_found.length} rows didn't match anyone.`].filter(Boolean).join(' ') || undefined,
+        tone: 'success',
+      });
+    } catch (e) {
+      toast({ title: 'Not uploaded', body: (e as Error).message, tone: 'danger' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Panel className="mb-4">
+      <div className="mb-1 flex items-center gap-2 text-[14px] font-bold"><Repeat className="size-4 text-iris" /> Follow-ups</div>
+      <p className="text-2 mb-3 text-[13px]">
+        {written} of {open.length} people still waiting on an answer have their 2nd and 3rd texts written. {due} {due === 1 ? 'is' : 'are'} due now.
+        Download the sheet, have the bot fill in Follow-up 2 and 3 (and Said no for anyone who did), then upload it.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button icon={<Download className="size-4" />} disabled={!missing} onClick={() => download(true)}>Sheet of {missing} without follow-ups</Button>
+        <Button variant="ghost" icon={<Download className="size-4" />} onClick={() => download(false)}>Everyone ({open.length})</Button>
+        <Button variant="primary" loading={busy} icon={<Upload className="size-4" />} onClick={() => input.current?.click()}>Upload filled sheet</Button>
+        <input ref={input} type="file" accept=".csv,.xlsx,.xlsm,text/csv" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ''; }} />
+      </div>
+    </Panel>
+  );
+}
+
 function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: string; owner: string | null }) {
   const toast = useToast();
   const mark = useMarkText();
@@ -246,7 +345,13 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
   const t = localTime(r.time_zone, now);
   const status = r.status as KitStatus;
   const ask = tidyAsk(r.asked_for);
-  const message = signedMessage(r.message, sender);
+  const first = signedMessage(r.message, sender);
+  // Someone who hasn't answered gets a 2nd text, then a 3rd, a few days apart.
+  const next = nextTouch(r, now);
+  const followUpDue = !!next?.due;
+  const message = followUpDue ? signedMessage(next!.message, sender) : first;
+  const sent = touchesSent(r);
+  const undoLast = sent > 1 && status === 'texted' ? ORDINAL[sent as 2 | 3] : null;
 
   const copy = (text: string, title: string) => {
     void navigator.clipboard?.writeText(text).then(
@@ -254,7 +359,7 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
       () => toast({ title: "Couldn't copy", body: 'Select the text and copy it yourself.', tone: 'info' }),
     );
   };
-  const set = async (s: KitStatus | 'reset', done: string) => {
+  const set = async (s: KitStatus | 'reset' | 'touch2' | 'touch3', done: string) => {
     setBusy(s);
     try {
       await mark(r.id, s);
@@ -275,7 +380,10 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
             <span className="text-3 tabular text-[12px]">#{r.position}</span>
             <h3 className="truncate text-[16px] font-bold">{r.name}</h3>
             <Pill tone={r.version === 'A' ? 'info' : 'iris'}>{r.version}</Pill>
-            {status !== 'to_text' && <Pill tone={KIT_STATUS[status].tone}>{KIT_STATUS[status].label}</Pill>}
+            {status !== 'to_text' && <Pill tone={KIT_STATUS[status].tone}>{KIT_STATUS[status].label}{sent > 1 ? ` ${sent}×` : ''}</Pill>}
+            {next && (next.due
+              ? <Pill tone="warn" solid>{ORDINAL[next.touch]} text due</Pill>
+              : <Pill tone="neutral">{ORDINAL[next.touch]} text {dayShort(next.dueAt)}</Pill>)}
             {owner && <Pill tone="neutral">{owner.split(/\s+/)[0]}</Pill>}
           </div>
           <div className="text-2 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]">
@@ -301,6 +409,17 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
       )}
       {more && r.tz_note && <p className="text-3 mt-1 text-[12px]">* {r.tz_note}</p>}
 
+      {followUpDue && (
+        <button onClick={() => setMore((m) => !m)} className="text-3 mt-3 block text-left text-[12px] font-semibold">
+          {r.texted_at && `1st text ${dayShort(r.texted_at)}`}{r.touch2_at && ` · 2nd ${dayShort(r.touch2_at)}`} · {more ? 'Hide' : 'Show'} what was sent
+        </button>
+      )}
+      {followUpDue && more && (
+        <div className="text-2 mt-2 grid gap-2 text-[13px]">
+          <div className="whitespace-pre-wrap rounded-2xl border border-[var(--hairline)] p-3">{first}</div>
+          {r.touch2_at && r.followup_2 && <div className="whitespace-pre-wrap rounded-2xl border border-[var(--hairline)] p-3">{signedMessage(r.followup_2, sender)}</div>}
+        </div>
+      )}
       <div className="fill mt-3 whitespace-pre-wrap rounded-2xl p-3.5 text-[14px] leading-relaxed">{message}</div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -320,6 +439,24 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
           <Button variant={opened ? 'success' : 'ghost'} loading={busy === 'texted'} icon={<Check className="size-4" />}
             onClick={() => set('texted', 'Marked texted')}>{opened ? 'Sent it? Tick Texted' : 'Texted'}</Button>
         )}
+        {followUpDue && (t.ok ? (
+          <a href={zoomSmsHref(r.phone)}
+            onClick={() => { copy(message, 'Message copied. Paste it in Zoom.'); setOpened(true); }}
+            className="inline-flex h-10 items-center gap-2 rounded-[14px] bg-[#0B5CFF] px-4 text-sm font-semibold text-white shadow-[0_8px_24px_-10px_rgba(11,92,255,0.8)] transition hover:brightness-110">
+            <Send className="size-4" /> Send {ORDINAL[next!.touch]} text
+          </a>
+        ) : (
+          <Button disabled icon={<Clock className="size-4" />}>Opens at {hourLabel(TEXT_FROM)} their time</Button>
+        ))}
+        {followUpDue && (
+          <Button size="md" icon={<Copy className="size-4" />} onClick={() => copy(message, 'Message copied')}>Copy message</Button>
+        )}
+        {followUpDue && (
+          <Button variant={opened ? 'success' : 'ghost'} loading={busy === `touch${next!.touch}`} icon={<Check className="size-4" />}
+            onClick={() => set(`touch${next!.touch}`, `${ORDINAL[next!.touch]} text marked sent`)}>
+            {opened ? `Sent it? Tick ${ORDINAL[next!.touch]} text` : `${ORDINAL[next!.touch]} text sent`}
+          </Button>
+        )}
         {status === 'texted' && (
           <Button variant="ghost" loading={busy === 'replied'} icon={<Reply className="size-4" />} onClick={() => set('replied', 'Marked replied')}>Replied</Button>
         )}
@@ -327,7 +464,9 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
           <Button variant="ghost" loading={busy === 'opted_out'} icon={<Ban className="size-4" />} onClick={() => set('opted_out', 'Opted out. Never text them again.')}>Opted out</Button>
         )}
         {status !== 'to_text' && (
-          <Button variant="ghost" loading={busy === 'reset'} icon={<RotateCcw className="size-4" />} onClick={() => set('reset', 'Back on To text')}>Undo</Button>
+          <Button variant="ghost" loading={busy === 'reset'} icon={<RotateCcw className="size-4" />} onClick={() => set('reset', undoLast ? `${undoLast} text undone` : 'Back on To text')}>
+            {undoLast ? `Undo ${undoLast} text` : 'Undo'}
+          </Button>
         )}
       </div>
     </Panel>

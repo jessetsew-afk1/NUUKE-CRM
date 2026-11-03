@@ -7,8 +7,10 @@ export interface TeamActivity {
   profile_id: string; full_name: string; avatar: unknown; role: Role; daily_target: number | null;
   dials: number; connected: number; meetings_booked: number; prospects: number; last_call_at: string | null;
   texts_sent: number; texts_replied: number; texts_opted_out: number; texts_left: number; texts_total: number; last_text_at: string | null;
+  /** 2nd and 3rd texts sent in the range. */
+  followups_sent: number;
   outcomes: { outcome: string | null; label: string; tone: string; count: number }[];
-  daily: { date: string; dials: number; connected: number; texts: number }[];
+  daily: { date: string; dials: number; connected: number; texts: number; followups: number }[];
 }
 
 export function useTeamActivity(from: string, to: string, enabled = true) {

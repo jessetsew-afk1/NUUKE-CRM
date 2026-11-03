@@ -2409,6 +2409,8 @@ export type Database = {
         Row: {
           asked_for: string | null
           created_at: string
+          followup_2: string | null
+          followup_3: string | null
           id: number
           kit: string
           message: string
@@ -2423,6 +2425,8 @@ export type Database = {
           status: string
           texted_at: string | null
           time_zone: string
+          touch2_at: string | null
+          touch3_at: string | null
           tz_label: string | null
           tz_note: string | null
           updated_at: string
@@ -2431,6 +2435,8 @@ export type Database = {
         Insert: {
           asked_for?: string | null
           created_at?: string
+          followup_2?: string | null
+          followup_3?: string | null
           id?: never
           kit?: string
           message: string
@@ -2445,6 +2451,8 @@ export type Database = {
           status?: string
           texted_at?: string | null
           time_zone: string
+          touch2_at?: string | null
+          touch3_at?: string | null
           tz_label?: string | null
           tz_note?: string | null
           updated_at?: string
@@ -2453,6 +2461,8 @@ export type Database = {
         Update: {
           asked_for?: string | null
           created_at?: string
+          followup_2?: string | null
+          followup_3?: string | null
           id?: never
           kit?: string
           message?: string
@@ -2467,6 +2477,8 @@ export type Database = {
           status?: string
           texted_at?: string | null
           time_zone?: string
+          touch2_at?: string | null
+          touch3_at?: string | null
           tz_label?: string | null
           tz_note?: string | null
           updated_at?: string
@@ -3609,6 +3621,7 @@ export type Database = {
           daily: Json
           daily_target: number
           dials: number
+          followups_sent: number
           full_name: string
           last_call_at: string
           last_text_at: string
@@ -3628,11 +3641,17 @@ export type Database = {
         Args: { p_count: number; p_from: string; p_to: string }
         Returns: number
       }
+      text_kit_followups: {
+        Args: { p_rows: Json }
+        Returns: Json
+      }
       text_kit_mark: {
         Args: { p_id: number; p_status: string }
         Returns: {
           asked_for: string | null
           created_at: string
+          followup_2: string | null
+          followup_3: string | null
           id: number
           kit: string
           message: string
@@ -3647,6 +3666,8 @@ export type Database = {
           status: string
           texted_at: string | null
           time_zone: string
+          touch2_at: string | null
+          touch3_at: string | null
           tz_label: string | null
           tz_note: string | null
           updated_at: string

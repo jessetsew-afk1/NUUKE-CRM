@@ -24,7 +24,9 @@ agent for every person who signs in.
   - Someone who opted out can't be marked texted again. Admins see every kit. Kits are loaded by an admin with SQL into `text_kit`.
   - **Hand out leads** (admins): give any number of leads still to text from one person to another, e.g. 50 to each appointment setter. The last ones in the giver's list move; texted and replied ones stay. Admins can also view one person's list at a time.
   - **Appointment setters** get Texts in their phone's bottom bar when they have leads. The kits are written in Isaiah's voice, so a setter's copy opens with their own name ("Ashley here, from Isaiah's team.", or "Soy Ashley, del equipo de Isaiah." in Spanish).
-- **Team** (admins, and salespeople an admin marks as **Sales lead** in Team & access): every rep's calls, connects, meetings booked, Zoom texts sent, replies and texts left, for today, yesterday, 7 or 30 days (days run 10pm to 10pm US Eastern). Open a rep for how their calls ended and their calls and texts per day. Replies count against the texts sent in the same range. A sales lead sees these numbers only, not other reps' leads, deals or pay.
+  - **Follow-ups:** anyone who hasn't replied or opted out gets a **2nd text** 3 days after the 1st, then a **3rd** 3 days after the 2nd. When one is due the card shows it with its own Send button (same 9am to 8pm rule), and the rep ticks **2nd text sent** / **3rd text sent**. **Follow-ups due** lists them, and the page opens there when any are due. Undo takes back the latest follow-up only. Anyone who replied or opted out gets no more.
+  - **Writing follow-ups** (admins): the Follow-ups panel downloads a sheet (CSV) of everyone still waiting on an answer, with what they asked for and their 1st text. A bot fills in **Follow-up 2** and **Follow-up 3**, and **Said no** (yes) for anyone who said no; **Upload filled sheet** saves them. Rows match by Text ID, or by phone. A blank follow-up keeps the one already saved; Said no opts the person out. Follow-ups are written in Isaiah's voice like the 1st text, and "Isaiah here", "it's Isaiah" or a "- Isaiah" sign-off become the sender's name.
+- **Team** (admins, and salespeople an admin marks as **Sales lead** in Team & access): every rep's calls, connects, meetings booked, Zoom texts sent (and follow-ups), replies and texts left, for today, yesterday, 7 or 30 days (days run 10pm to 10pm US Eastern). Open a rep for how their calls ended and their calls and texts per day. Replies count against the texts sent in the same range. A sales lead sees these numbers only, not other reps' leads, deals or pay.
 - **Dialer.** Filter by service, platform and enquiry date, press **Start**, and work one card at a time.
   - **Card:** name, emails, platform, service, date, query details, old notes from the sheet, and call history.
     - **Phone numbers:** each number gets its own **Copy** and **Call** button, so a lead with two or three numbers is dialled one number at a time in Zoom Phone. Numbers the sheet put under an email column, and emails it put under Phone, are shown where they belong.
@@ -205,7 +207,7 @@ Demo logins (password `NuukeDemo!2026`):
 | Production | `faisal@nuuke.test`, `ayesha@nuuke.test`, `umar@nuuke.test` |
 | Clients | `sarah@halcyon.test` (two projects), `leo@brightbrew.test` |
 
-`node scripts/check-rules.mjs` signs in as different people and checks 117 permission and business rules.
+`node scripts/check-rules.mjs` signs in as different people and checks 208 permission and business rules.
 For example:
 - a rep cannot see a colleague's leads or pay
 - a client never sees internal tasks, files, or another client's project
@@ -288,6 +290,7 @@ For example:
 - `20261029000100_text_kit_assign.sql` lets admins hand out text kit leads.
 - `20261029000200_team_activity.sql` adds sales leads and the Team page's numbers.
 - `20261030000100_team_day.sql` makes the Team page's days run 10pm to 10pm Eastern.
+- `20261103000100_text_followups.sql` adds 2nd and 3rd follow-up texts, the follow-up sheet upload, and counts follow-ups on the Team page.
 
 ---
 
