@@ -2494,6 +2494,68 @@ export type Database = {
           },
         ]
       }
+      text_thread: {
+        Row: {
+          author_id: string | null
+          body: string
+          created_at: string
+          id: number
+          intent: string | null
+          kind: string
+          kit_id: number
+          next_step: string | null
+        }
+        Insert: {
+          author_id?: string | null
+          body: string
+          created_at?: string
+          id?: never
+          intent?: string | null
+          kind: string
+          kit_id: number
+          next_step?: string | null
+        }
+        Update: {
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          id?: never
+          intent?: string | null
+          kind?: string
+          kit_id?: number
+          next_step?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "text_thread_kit_id_fkey"
+            columns: ["kit_id"]
+            isOneToOne: false
+            referencedRelation: "text_kit"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_playbook: {
+        Row: {
+          body: string
+          id: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          body: string
+          id?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          body?: string
+          id?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -3672,6 +3734,28 @@ export type Database = {
           tz_note: string | null
           updated_at: string
           version: string
+        }
+      }
+      text_thread_add: {
+        Args: { p_kit: number; p_kind: string; p_body: string; p_intent?: string; p_next_step?: string }
+        Returns: {
+          author_id: string | null
+          body: string
+          created_at: string
+          id: number
+          intent: string | null
+          kind: string
+          kit_id: number
+          next_step: string | null
+        }
+      }
+      ai_playbook_save: {
+        Args: { p_body: string }
+        Returns: {
+          body: string
+          id: number
+          updated_at: string
+          updated_by: string | null
         }
       }
       tidy_repeat_leads: {

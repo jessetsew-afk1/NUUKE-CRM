@@ -26,6 +26,9 @@ agent for every person who signs in.
   - **Appointment setters** get Texts in their phone's bottom bar when they have leads. The kits are written in Isaiah's voice, so a setter's copy opens with their own name ("Ashley here, from Isaiah's team.", or "Soy Ashley, del equipo de Isaiah." in Spanish).
   - **Follow-ups:** anyone who hasn't replied or opted out gets a **2nd text** 3 days after the 1st, then a **3rd** 3 days after the 2nd. When one is due the card shows it with its own Send button (same 9am to 8pm rule), and the rep ticks **2nd text sent** / **3rd text sent**. **Follow-ups due** lists them, and the page opens there when any are due. Undo takes back the latest follow-up only. Anyone who replied or opted out gets no more.
   - **Writing follow-ups** (admins): the Follow-ups panel downloads a sheet (CSV) of everyone still waiting on an answer, with what they asked for and their 1st text. A bot fills in **Follow-up 2** and **Follow-up 3**, and **Said no** (yes) for anyone who said no; **Upload filled sheet** saves them. Rows match by Text ID, or by phone. A blank follow-up keeps the one already saved; Said no opts the person out. Follow-ups are written in Isaiah's voice like the 1st text, and "Isaiah here", "it's Isaiah" or a "- Isaiah" sign-off become the sender's name.
+  - **Reply assistant:** when a prospect texts back, the rep taps **They replied** and pastes their message. It's saved to that prospect's conversation, the text is marked Replied, and Claude suggests an answer, written as the rep, following the playbook and knowing everything said so far (the 1st text, follow-ups, every reply, caller notes). The rep can edit it, send it from Zoom (**Send in Zoom**), and tick **Sent** so the next suggestion knows. **Try again** takes a note ("shorter", "in Spanish"). Someone who texts STOP is opted out with no reply; "no" offers **Opt them out**. Replied prospects get a **Reply** button for the next message. Reps see their own conversations, admins see all.
+  - **Playbook** (admins): the instructions every suggestion follows (who NUUKE is, the offers, tone, never quoting prices, how to handle questions), edited on the Texts page.
+  - The assistant runs in `netlify/functions/reply-assist.mts` and needs **`ANTHROPIC_API_KEY`** in Netlify (an API key from console.anthropic.com, billed per use, separate from any Claude subscription). The key never reaches the browser.
 - **Team** (admins, and salespeople an admin marks as **Sales lead** in Team & access): every rep's calls, connects, meetings booked, Zoom texts sent (and follow-ups), replies and texts left, for today, yesterday, 7 or 30 days (days run 10pm to 10pm US Eastern). Open a rep for how their calls ended and their calls and texts per day. Replies count against the texts sent in the same range. A sales lead sees these numbers only, not other reps' leads, deals or pay.
 - **Dialer.** Filter by service, platform and enquiry date, press **Start**, and work one card at a time.
   - **Card:** name, emails, platform, service, date, query details, old notes from the sheet, and call history.
@@ -207,7 +210,7 @@ Demo logins (password `NuukeDemo!2026`):
 | Production | `faisal@nuuke.test`, `ayesha@nuuke.test`, `umar@nuuke.test` |
 | Clients | `sarah@halcyon.test` (two projects), `leo@brightbrew.test` |
 
-`node scripts/check-rules.mjs` signs in as different people and checks 208 permission and business rules.
+`node scripts/check-rules.mjs` signs in as different people and checks 215 permission and business rules.
 For example:
 - a rep cannot see a colleague's leads or pay
 - a client never sees internal tasks, files, or another client's project
@@ -248,6 +251,7 @@ to start. Free projects pause after a week with no visits, so move to Pro ($25/m
    | `VITE_SUPABASE_PUBLISHABLE_KEY` | publishable key |
    | `SUPABASE_URL` | Project URL |
    | `SUPABASE_SECRET_KEY` | secret key. **Never** prefix this one with `VITE_` |
+   | `ANTHROPIC_API_KEY` | for the texts reply assistant: an API key from console.anthropic.com. **Never** prefix this one with `VITE_` |
 
 3. Deploy. Sign in with the admin you created and add your team from **Team & access**.
 4. Custom domain: **Domain management → Add a domain**, then update the Supabase Site URL to match.
@@ -291,6 +295,7 @@ For example:
 - `20261029000200_team_activity.sql` adds sales leads and the Team page's numbers.
 - `20261030000100_team_day.sql` makes the Team page's days run 10pm to 10pm Eastern.
 - `20261103000100_text_followups.sql` adds 2nd and 3rd follow-up texts, the follow-up sheet upload, and counts follow-ups on the Team page.
+- `20261104000100_text_ai_replies.sql` adds each prospect's text conversation and the reply assistant's playbook.
 
 ---
 

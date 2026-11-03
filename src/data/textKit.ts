@@ -78,22 +78,7 @@ export function localTime(tz: string, now = new Date()) {
 export const assignTexts = (to: string, count: number, from: string) =>
   rpc<number>('text_kit_assign', { p_to: to, p_count: count, p_from: from });
 
-/**
- * The kits are written in Isaiah's voice. When someone else sends one it opens with
- * their own name instead ("Ashley here, from Isaiah's team."), so nobody texts as Isaiah.
- */
-export function signedMessage(message: string, sender: string | null | undefined) {
-  const first = (sender ?? '').trim().split(/\s+/)[0];
-  if (!first || /^isaiah$/i.test(first)) return message;
-  return message
-    .replace(/\bIsaiah here\./, `${first} here, from Isaiah's team.`)
-    .replace(/\bSoy Isaiah\./, `Soy ${first}, del equipo de Isaiah.`)
-    // Follow-ups word it more loosely: "Isaiah here again", "Isaiah again", "it's Isaiah",
-    // and a "- Isaiah" sign-off on its own line or at the end of one.
-    .replace(/\bIsaiah (here|again)\b/g, `${first} $1`)
-    .replace(/\b(it's|it is|this is|soy) Isaiah\b/gi, `$1 ${first}`)
-    .replace(/(^|\s)([-–—~]\s*)Isaiah\s*$/gm, `$1$2${first}`);
-}
+export { signedMessage } from '@/lib/signed';
 
 /* ------------------------------------------------------------------ follow-up sheets */
 /** Column headers of the follow-up sheet; the upload finds columns by these names. */
@@ -157,3 +142,56 @@ export function versionStats(rows: KitText[]) {
     return { version: v, total: mine.length, sent, replied, optedOut, rate: sent ? replied / sent : null };
   });
 }
+
+/* ------------------------------------------------------------------ reply assistant */
+export type ThreadMessage = Database['public']['Tables']['text_thread']['Row'];
+export type ReplyIntent = 'interested' | 'question' | 'not_now' | 'not_interested' | 'stop' | 'wrong_person' | 'other';
+export interface ReplySuggestion { reply: string; intent: ReplyIntent; next_step: string; opted_out: boolean }
+
+export const INTENT: Record<ReplyIntent, { label: string; tone: Tone }> = {
+  interested: { label: 'Interested', tone: 'great' },
+  question: { label: 'Has a question', tone: 'info' },
+  not_now: { label: 'Not right now', tone: 'warn' },
+  not_interested: { label: 'Said no', tone: 'bad' },
+  stop: { label: 'Asked to stop', tone: 'bad' },
+  wrong_person: { label: 'Wrong person', tone: 'neutral' },
+  other: { label: 'Reply', tone: 'neutral' },
+};
+
+/** Everything said with one prospect: their replies, what we sent, and suggestions. */
+export function useThread(kitId: number, enabled = true) {
+  return useQuery({
+    queryKey: ['text-thread', kitId],
+    enabled,
+    queryFn: async () => must(await supabase.from('text_thread').select('*').eq('kit_id', kitId).order('created_at').order('id')) as ThreadMessage[],
+  });
+}
+
+/**
+ * Ask the assistant for a reply. Pass what they texted back (saved to the conversation
+ * first), or leave it out to get another draft for the same message.
+ */
+export async function suggestReply(kitId: number, theirMessage?: string, instruction?: string): Promise<ReplySuggestion> {
+  const { data } = await supabase.auth.getSession();
+  const res = await fetch('/.netlify/functions/reply-assist', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${data.session?.access_token ?? ''}` },
+    body: JSON.stringify({ kit_id: kitId, their_message: theirMessage || undefined, instruction: instruction || undefined }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? (res.status === 504 || res.status === 502 ? 'The assistant took too long. Try again.' : `Request failed (${res.status})`));
+  return json as ReplySuggestion;
+}
+
+/** Save to the conversation what was actually sent (or a reply that came in). */
+export const addToThread = (kitId: number, kind: 'them' | 'us', body: string) =>
+  rpc<ThreadMessage>('text_thread_add', { p_kit: kitId, p_kind: kind, p_body: body });
+
+export function usePlaybook() {
+  return useQuery({
+    queryKey: ['ai-playbook'],
+    queryFn: async () => must(await supabase.from('ai_playbook').select('*').eq('id', 1).maybeSingle()) as Database['public']['Tables']['ai_playbook']['Row'] | null,
+  });
+}
+
+export const savePlaybook = (body: string) => rpc('ai_playbook_save', { p_body: body });

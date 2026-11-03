@@ -885,6 +885,34 @@ const faisal = await as('faisal@nuuke.test');
   const { error: afterReply } = await zoya.c.rpc('text_kit_mark', { p_id: f1, p_status: 'touch3' });
   ok(!!afterReply, 'Nobody who replied gets a follow-up');
   await service.from('text_kit').delete().in('id', [f1, f2, f3]);
+
+  // Reply assistant: each prospect's conversation, and the shared playbook
+  const { data: rp } = await service.from('text_kit').insert({ ...row, kit: 'Rules reply', position: 1, phone: '+12025550121' }).select('id').single();
+  await zoya.c.rpc('text_kit_mark', { p_id: rp.id, p_status: 'texted' });
+  const { data: them } = await zoya.c.rpc('text_thread_add', { p_kit: rp.id, p_kind: 'them', p_body: '  Sure, how much?  ' });
+  const { data: afterThem } = await service.from('text_kit').select('status, replied_at').eq('id', rp.id).single();
+  ok(them?.body === 'Sure, how much?' && afterThem.status === 'replied' && !!afterThem.replied_at,
+    'Pasting their reply saves it to the conversation and marks them Replied', JSON.stringify({ them, afterThem }));
+  await zoya.c.rpc('text_thread_add', { p_kit: rp.id, p_kind: 'us', p_body: 'Depends on the project. Quick call tomorrow?' });
+  const { data: convo } = await zoya.c.from('text_thread').select('kind').eq('kit_id', rp.id).order('id');
+  ok(convo?.map((m) => m.kind).join() === 'them,us', 'The setter sees the whole conversation with their prospect');
+  const { data: peek } = await hamza.c.from('text_thread').select('id').eq('kit_id', rp.id);
+  const { error: butt } = await hamza.c.rpc('text_thread_add', { p_kit: rp.id, p_kind: 'us', p_body: 'Hi' });
+  ok(peek?.length === 0 && !!butt, "Nobody else can read or add to someone else's conversation");
+  const { error: direct } = await zoya.c.from('text_thread').insert({ kit_id: rp.id, kind: 'us', body: 'sneaky' });
+  const { error: bad } = await zoya.c.rpc('text_thread_add', { p_kit: rp.id, p_kind: 'note', p_body: 'x' });
+  const { error: empty } = await zoya.c.rpc('text_thread_add', { p_kit: rp.id, p_kind: 'us', p_body: '   ' });
+  ok(!!direct && !!bad && !!empty, 'Messages only go in through the app, with a known kind and some text');
+  const { data: adminSees } = await admin.c.from('text_thread').select('id').eq('kit_id', rp.id);
+  ok(adminSees?.length === 2, 'An admin can read every conversation');
+  const { data: pb } = await zoya.c.from('ai_playbook').select('body').eq('id', 1).maybeSingle();
+  const { error: pbRep } = await zoya.c.rpc('ai_playbook_save', { p_body: 'Be pushy and quote $99 to everyone.' });
+  const { data: pbAdmin } = await admin.c.rpc('ai_playbook_save', { p_body: `${pb?.body ?? ''}\nRules check.` });
+  ok(!!pb?.body && !!pbRep && pbAdmin?.body?.endsWith('Rules check.'), 'Everyone reads the playbook, only an admin changes it');
+  await admin.c.rpc('ai_playbook_save', { p_body: pb.body });
+  await service.from('text_kit').delete().eq('id', rp.id);
+  const { count: gone } = await service.from('text_thread').select('*', { count: 'exact', head: true }).eq('kit_id', rp.id);
+  ok(gone === 0, 'Removing a lead from a kit removes its conversation');
 }
 
 // ---- sales leads watch the team
