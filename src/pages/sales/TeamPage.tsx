@@ -20,7 +20,7 @@ import type { Tone } from '@/ui/kit';
 
 type Range = 'today' | 'yesterday' | 'week' | 'month';
 
-const busyness = (r: TeamActivity) => r.dials + r.texts_sent;
+const busyness = (r: TeamActivity) => r.dials + r.texts_sent + r.followups_sent;
 
 export default function TeamPage() {
   const { profile } = useAuth();
@@ -40,6 +40,7 @@ export default function TeamPage() {
   const dials = sum('dials');
   const connected = sum('connected');
   const textsSent = sum('texts_sent');
+  const followups = sum('followups_sent');
   const oneDay = from === to;
 
   if (!allowed) {
@@ -63,7 +64,7 @@ export default function TeamPage() {
           sub={dials ? `${pct(connected / dials)} pick-up rate` : ' '} />
         <Stat label="Meetings booked" value={team.data ? count(sum('meetings_booked')) : '–'} icon={<CalendarCheck className="size-4" />} accent="#F08A4B" sub=" " />
         <Stat label="Texts sent" value={team.data ? count(textsSent) : '–'} icon={<MessageSquareText className="size-4" />} accent="#0B5CFF"
-          sub={team.data ? `${count(sum('texts_left'))} still to text` : ' '} />
+          sub={team.data ? `${followups ? `+ ${count(followups)} follow-ups · ` : ''}${count(sum('texts_left'))} still to text` : ' '} />
         <Stat label="Text replies" value={team.data ? count(sum('texts_replied')) : '–'} icon={<Reply className="size-4" />} accent="#30C46C"
           sub={textsSent ? `${pct(sum('texts_replied') / textsSent)} of texts sent` : ' '} />
       </div>
@@ -79,7 +80,7 @@ export default function TeamPage() {
         </div>
       )}
       <p className="text-3 mt-4 text-[12px]">
-        Days run 10pm to 10pm Eastern, so a new day starts at 10pm ET. Texts count when the rep ticks Texted (or Replied) on the Texts page.
+        Days run 10pm to 10pm Eastern, so a new day starts at 10pm ET. Texts count when the rep ticks Texted (or Replied) on the Texts page; follow-ups when they tick the 2nd or 3rd text sent.
       </p>
     </>
   );
@@ -118,7 +119,9 @@ function RepCard({ r, oneDay, open, onToggle }: { r: TeamActivity; oneDay: boole
           <Figure label="Calls" value={count(r.dials)} sub={target ? `of ${target} target` : undefined} tone={r.dials ? undefined : 'muted'} />
           <Figure label="Connected" value={count(r.connected)} sub={r.dials ? pct(r.connected / r.dials) : undefined} tone={r.connected ? undefined : 'muted'} />
           <Figure label="Meetings" value={count(r.meetings_booked)} tone={r.meetings_booked ? undefined : 'muted'} />
-          <Figure label="Texts sent" value={count(r.texts_sent)} sub={r.texts_total ? `${count(r.texts_left)} left of ${count(r.texts_total)}` : 'No text kit'} tone={r.texts_sent ? undefined : 'muted'} />
+          <Figure label="Texts sent" value={count(r.texts_sent)}
+            sub={r.texts_total ? `${r.followups_sent ? `+${count(r.followups_sent)} follow-ups · ` : ''}${count(r.texts_left)} left` : 'No text kit'}
+            tone={r.texts_sent || r.followups_sent ? undefined : 'muted'} />
           <Figure label="Replies" value={count(r.texts_replied)} sub={r.texts_opted_out ? `${r.texts_opted_out} opted out` : undefined} tone={r.texts_replied ? undefined : 'muted'} />
         </div>
         <ChevronDown className={clsx('text-3 ml-auto size-5 shrink-0 transition-transform sm:ml-0', open && 'rotate-180')} />
@@ -153,9 +156,9 @@ function RepDetail({ r, oneDay }: { r: TeamActivity; oneDay: boolean }) {
             </div>
             {r.texts_total > 0 && (
               <div>
-                <PanelHeader title="Texts sent per day" />
+                <PanelHeader title="Texts sent per day" sub="1st texts and follow-ups" />
                 <ColumnChart height={140} color="#0B5CFF" ariaLabel={`${first}'s texts per day`}
-                  data={r.daily.map((d) => ({ key: d.date, label: d.date.slice(5), value: d.texts }))} />
+                  data={r.daily.map((d) => ({ key: d.date, label: d.date.slice(5), value: d.texts + (d.followups ?? 0) }))} />
               </div>
             )}
           </>

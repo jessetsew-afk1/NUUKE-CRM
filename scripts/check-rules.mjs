@@ -850,6 +850,41 @@ const faisal = await as('faisal@nuuke.test');
   const { error: a2 } = await admin.c.rpc('text_kit_assign', { p_to: umarC.id, p_count: 1, p_from: zoya.id });
   ok(!!a2, 'Texts can only go to sales, setters or admins');
   await service.from('text_kit').delete().in('id', fourIds);
+
+  // Follow-ups: a 2nd and 3rd text for people who haven't answered
+  const { data: fu } = await service.from('text_kit').insert([1, 2, 3].map((n) => ({ ...row, kit: 'Rules follow-up', position: n, phone: `+1202555011${n}` }))).select('id, position');
+  const [f1, f2, f3] = [1, 2, 3].map((n) => fu.find((r) => r.position === n).id);
+  const { error: l1 } = await zoya.c.rpc('text_kit_followups', { p_rows: [{ id: String(f1), followup_2: 'x' }] });
+  ok(!!l1, 'Only an admin can load follow-ups');
+  const { data: loaded } = await admin.c.rpc('text_kit_followups', {
+    p_rows: [
+      { id: String(f1), followup_2: 'Second?', followup_3: 'Third?' },
+      { phone: '(202) 555-0112', followup_2: 'By phone?' },
+      { id: String(f3), said_no: true },
+      { id: '999999999', followup_2: 'Nobody' },
+    ],
+  });
+  const { data: after } = await service.from('text_kit').select('id, followup_2, followup_3, status').in('id', [f1, f2, f3]).order('position');
+  ok(loaded?.matched === 3 && loaded.written === 2 && loaded.said_no === 1 && loaded.not_found.length === 1
+    && after[0].followup_3 === 'Third?' && after[1].followup_2 === 'By phone?' && after[2].status === 'opted_out',
+  'Follow-ups load by id or phone, and "said no" opts them out', JSON.stringify({ loaded, after }));
+  await admin.c.rpc('text_kit_followups', { p_rows: [{ id: String(f1), followup_2: '', followup_3: 'New third?' }] });
+  const { data: kept } = await service.from('text_kit').select('followup_2, followup_3').eq('id', f1).single();
+  ok(kept.followup_2 === 'Second?' && kept.followup_3 === 'New third?', 'A blank follow-up in the sheet keeps the one already saved');
+  const { error: early } = await zoya.c.rpc('text_kit_mark', { p_id: f1, p_status: 'touch2' });
+  ok(!!early, 'A follow-up cannot be sent before the first text');
+  await zoya.c.rpc('text_kit_mark', { p_id: f1, p_status: 'texted' });
+  const { error: skip } = await zoya.c.rpc('text_kit_mark', { p_id: f1, p_status: 'touch3' });
+  ok(!!skip, 'The 3rd text cannot go before the 2nd');
+  const { data: t2 } = await zoya.c.rpc('text_kit_mark', { p_id: f1, p_status: 'touch2' });
+  const { data: t3 } = await zoya.c.rpc('text_kit_mark', { p_id: f1, p_status: 'touch3' });
+  ok(!!t2?.touch2_at && !!t3?.touch3_at && t3.status === 'texted', 'Follow-ups are ticked in order and keep them as texted');
+  const { data: u1 } = await zoya.c.rpc('text_kit_mark', { p_id: f1, p_status: 'reset' });
+  ok(!u1.touch3_at && !!u1.touch2_at && u1.status === 'texted', 'Undo takes back only the latest follow-up');
+  await zoya.c.rpc('text_kit_mark', { p_id: f1, p_status: 'replied' });
+  const { error: afterReply } = await zoya.c.rpc('text_kit_mark', { p_id: f1, p_status: 'touch3' });
+  ok(!!afterReply, 'Nobody who replied gets a follow-up');
+  await service.from('text_kit').delete().in('id', [f1, f2, f3]);
 }
 
 // ---- sales leads watch the team
