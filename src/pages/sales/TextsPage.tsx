@@ -389,7 +389,7 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
           <div className="text-2 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]">
             <button className="tabular font-semibold underline-offset-2 hover:underline" title="Copy number"
               onClick={() => copy(prettyPhone(r.phone), 'Number copied')}>{prettyPhone(r.phone)}</button>
-            {r.posted_on && <span>· Bark post {dayShort(r.posted_on)}</span>}
+            {r.posted_on && <span>· {r.kit} post {dayShort(r.posted_on)}</span>}
           </div>
         </div>
         <div className={clsx('flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold', t.ok ? 'bg-[rgba(48,196,108,0.14)] text-ok' : 'fill text-2')}
