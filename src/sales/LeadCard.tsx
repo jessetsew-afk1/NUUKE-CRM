@@ -10,6 +10,8 @@ import { useLeadHistory, OUTCOME_TONE } from '@/data/sales';
 import { coldOf, fillFieldsOf, useLeadSheet } from '@/data/sheets';
 import { usePeople } from '@/data/common';
 import { contactsOf, zoomCallHref as zoomHref } from '@/lib/phones';
+import { copyText } from '@/lib/clipboard';
+import { useZoomLink } from '@/lib/zoomLaunch';
 import { Button, Pill, spring } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { ago, day, dateTime, friendly } from '@/lib/format';
@@ -17,20 +19,7 @@ import { EditLeadSheet } from './EditLeadSheet';
 import { ColdBody, ColdContact, ColdPills, ColdSubline } from './ColdCard';
 
 /* ---------------------------------------------------------------- helpers */
-export async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    ta.remove();
-  }
-}
+export { copyText } from '@/lib/clipboard';
 
 /** Zoom Phone's click-to-call link for one number. Works when the Zoom desktop app is installed. */
 export const zoomCallHref = zoomHref;
@@ -123,6 +112,7 @@ export function LeadCard({
   fillFields?: FillField[];
 }) {
   const [editing, setEditing] = useState(false);
+  const zoomLink = useZoomLink();
   const cold = coldOf(lead);
   const sheet = useLeadSheet(cold && !fillFields ? lead.sheet_id : null);
   const fields = fillFields ?? fillFieldsOf(sheet.data);
@@ -173,6 +163,7 @@ export function LeadCard({
               <CopyButton value={p} label={phones.length > 1 ? `Number ${i + 1}` : 'Number'} />
               <a
                 href={zoomCallHref(p, lead.country)}
+                onClick={() => zoomLink('call', p)}
                 className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0B5CFF] px-3 text-[13px] font-bold text-white hover:brightness-110"
                 title={`Opens Zoom Phone with ${p} only`}
               >

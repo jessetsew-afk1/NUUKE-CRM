@@ -19,6 +19,7 @@ import {
 import { dayShort, localISO, pct } from '@/lib/format';
 import { Button, Chip, Empty, Input, PageHeader, Panel, Picker, Pill, Skeleton } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
+import { useZoomLink } from '@/lib/zoomLaunch';
 
 type View = KitStatus | 'all' | 'due';
 
@@ -353,6 +354,7 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
   const sent = touchesSent(r);
   const undoLast = sent > 1 && status === 'texted' ? ORDINAL[sent as 2 | 3] : null;
 
+  const zoomLink = useZoomLink();
   const copy = (text: string, title: string) => {
     void navigator.clipboard?.writeText(text).then(
       () => toast({ title, tone: 'success', duration: 1800 }),
@@ -425,7 +427,7 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {status === 'to_text' && (t.ok ? (
           <a href={zoomSmsHref(r.phone)}
-            onClick={() => { copy(message, 'Message copied. Paste it in Zoom.'); setOpened(true); }}
+            onClick={() => { copy(message, 'Message copied. Paste it in Zoom.'); setOpened(true); zoomLink('text', prettyPhone(r.phone)); }}
             className="inline-flex h-10 items-center gap-2 rounded-[14px] bg-[#0B5CFF] px-4 text-sm font-semibold text-white shadow-[0_8px_24px_-10px_rgba(11,92,255,0.8)] transition hover:brightness-110">
             <Send className="size-4" /> Send text
           </a>
@@ -441,7 +443,7 @@ function TextCard({ r, now, sender, owner }: { r: KitText; now: Date; sender: st
         )}
         {followUpDue && (t.ok ? (
           <a href={zoomSmsHref(r.phone)}
-            onClick={() => { copy(message, 'Message copied. Paste it in Zoom.'); setOpened(true); }}
+            onClick={() => { copy(message, 'Message copied. Paste it in Zoom.'); setOpened(true); zoomLink('text', prettyPhone(r.phone)); }}
             className="inline-flex h-10 items-center gap-2 rounded-[14px] bg-[#0B5CFF] px-4 text-sm font-semibold text-white shadow-[0_8px_24px_-10px_rgba(11,92,255,0.8)] transition hover:brightness-110">
             <Send className="size-4" /> Send {ORDINAL[next!.touch]} text
           </a>

@@ -9,6 +9,7 @@ import { usePeople } from '@/data/common';
 import type { MeetingLead, MeetingWithLead } from '@/data/sales';
 import { must, supabase } from '@/lib/supabase';
 import { contactsOf, zoomCallHref } from '@/lib/phones';
+import { useZoomLink } from '@/lib/zoomLaunch';
 import { bothTimes, zoneMeta } from '@/lib/timezones';
 import type { Meeting } from '@/lib/types';
 import { AgentAvatar } from '@/shell/AgentAvatar';
@@ -129,6 +130,7 @@ const linkify = (s: string) => (/^https?:\/\//i.test(s) ? s : /^[\w-]+(\.[\w-]+)
 export function MeetingPrep({ meeting }: { meeting: AnyMeeting }) {
   const people = usePeople();
   const fetched = useMeetingLead(meeting);
+  const zoomLink = useZoomLink();
   const lead = meeting.leads !== undefined ? meeting.leads : fetched.data;
   const rep = people.data?.find((p) => p.id === meeting.owner_id);
   const tm = people.data?.find((p) => p.id === meeting.technical_manager_id);
@@ -183,7 +185,7 @@ export function MeetingPrep({ meeting }: { meeting: AnyMeeting }) {
                 <Phone className="text-3 size-4" />
                 <span className="tabular font-mono text-[15px] font-semibold">{p}</span>
                 <CopyButton value={p} label="Number" className="!h-8" />
-                <a href={zoomCallHref(p, lead.country)} className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-[#0B5CFF] px-3 text-[12px] font-bold text-white">
+                <a href={zoomCallHref(p, lead.country)} onClick={() => zoomLink('call', p)} className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-[#0B5CFF] px-3 text-[12px] font-bold text-white">
                   <PhoneCall className="size-3.5" /> Call
                 </a>
               </div>
