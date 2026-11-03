@@ -88,10 +88,11 @@ export function signedMessage(message: string, sender: string | null | undefined
   return message
     .replace(/\bIsaiah here\./, `${first} here, from Isaiah's team.`)
     .replace(/\bSoy Isaiah\./, `Soy ${first}, del equipo de Isaiah.`)
-    // Follow-ups word it more loosely: "Isaiah here again", "it's Isaiah", "- Isaiah".
-    .replace(/\bIsaiah here\b/g, `${first} here`)
+    // Follow-ups word it more loosely: "Isaiah here again", "Isaiah again", "it's Isaiah",
+    // and a "- Isaiah" sign-off on its own line or at the end of one.
+    .replace(/\bIsaiah (here|again)\b/g, `${first} $1`)
     .replace(/\b(it's|it is|this is|soy) Isaiah\b/gi, `$1 ${first}`)
-    .replace(/^(\s*[-–—~]\s*)Isaiah\s*$/gm, `$1${first}`);
+    .replace(/(^|\s)([-–—~]\s*)Isaiah\s*$/gm, `$1$2${first}`);
 }
 
 /* ------------------------------------------------------------------ follow-up sheets */
