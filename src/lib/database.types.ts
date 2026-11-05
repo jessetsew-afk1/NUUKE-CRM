@@ -1663,6 +1663,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_sales_lead: boolean
+          also_story_house: boolean
           is_technical_manager: boolean
           phone: string | null
           role: Database["public"]["Enums"]["app_role"]
@@ -1678,6 +1679,7 @@ export type Database = {
           id: string
           is_active?: boolean
           is_sales_lead?: boolean
+          also_story_house?: boolean
           is_technical_manager?: boolean
           phone?: string | null
           role: Database["public"]["Enums"]["app_role"]
@@ -1693,6 +1695,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_sales_lead?: boolean
+          also_story_house?: boolean
           is_technical_manager?: boolean
           phone?: string | null
           role?: Database["public"]["Enums"]["app_role"]

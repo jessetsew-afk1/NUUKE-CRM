@@ -85,6 +85,7 @@ export default function AdminPeople() {
                     {p.department && <Pill tone="neutral">{deptLabel(p.department)}</Pill>}
                     {p.is_technical_manager && <Pill tone="iris">Tech manager</Pill>}
                     {p.is_sales_lead && <Pill tone="info">Sales lead</Pill>}
+                    {p.also_story_house && <Pill tone="neutral">+ Story&amp;House</Pill>}
                     {!p.is_active && <Pill tone="bad" solid>Off</Pill>}
                     {!p.is_active && p.role === 'sales' && hasWork(work.data?.get(p.id)) && <Pill tone="warn">Work to hand over</Pill>}
                   </div>
@@ -113,7 +114,7 @@ export default function AdminPeople() {
 interface Form {
   full_name: string; email: string; role: Role; department: string; title: string; phone: string; password: string;
   salary: string; tracks: boolean; shift_start: string; shift_hours: string; work_days: number[]; dial_target: string;
-  target_usd: string; joined_on: string; active: boolean; tm: boolean; lead: boolean;
+  target_usd: string; joined_on: string; active: boolean; tm: boolean; lead: boolean; both: boolean;
 }
 
 const genPassword = () => {
@@ -149,7 +150,7 @@ function PersonSheet({ person, onClose, work, onHandOver }: {
       shift_start: (e?.shift_start ?? '18:00').slice(0, 5), shift_hours: String((e?.shift_minutes ?? 540) / 60),
       work_days: e?.work_days ?? [1, 2, 3, 4, 5], dial_target: String(e?.daily_dial_target ?? 250),
       target_usd: e?.monthly_target_usd ? String(e.monthly_target_usd) : '', joined_on: e?.joined_on ?? localISO(),
-      active: p?.is_active ?? true, tm: p?.is_technical_manager ?? false, lead: p?.is_sales_lead ?? false,
+      active: p?.is_active ?? true, tm: p?.is_technical_manager ?? false, lead: p?.is_sales_lead ?? false, both: p?.also_story_house ?? false,
     } : null);
   }
   if (!form) return <Sheet open={false} onClose={onClose}>{null}</Sheet>;
@@ -179,6 +180,10 @@ function PersonSheet({ person, onClose, work, onHandOver }: {
           const { error } = await supabase.from('profiles').update({ is_technical_manager: true }).eq('id', created.id);
           if (error) throw new Error(error.message);
         }
+        if (form.role === 'sales' && form.both && created.id) {
+          const { error } = await supabase.from('profiles').update({ also_story_house: true }).eq('id', created.id);
+          if (error) throw new Error(error.message);
+        }
         if (form.role === 'sales' && form.lead && created.id) {
           const { error } = await supabase.from('profiles').update({ is_sales_lead: true }).eq('id', created.id);
           if (error) throw new Error(error.message);
@@ -196,6 +201,11 @@ function PersonSheet({ person, onClose, work, onHandOver }: {
         const tm = staff && form.tm;
         if (tm !== p.is_technical_manager) {
           const { error } = await supabase.from('profiles').update({ is_technical_manager: tm }).eq('id', p.id);
+          if (error) throw new Error(error.message);
+        }
+        const both = form.role === 'sales' && form.department !== 'story_house' && form.both;
+        if (both !== p.also_story_house) {
+          const { error } = await supabase.from('profiles').update({ also_story_house: both }).eq('id', p.id);
           if (error) throw new Error(error.message);
         }
         const lead = form.role === 'sales' && form.lead;
@@ -246,6 +256,15 @@ function PersonSheet({ person, onClose, work, onHandOver }: {
                   <div className="text-2 text-[13px]">Reps can put them on client meetings. They see those meetings, with the lead and the rep's prep, in “Client meetings”.</div>
                 </div>
                 <Switch checked={form.tm} onChange={(v) => set('tm', v)} />
+              </div>
+            )}
+            {form.role === 'sales' && form.department !== 'story_house' && (
+              <div className="fill flex items-center justify-between gap-4 rounded-[18px] p-3.5 sm:col-span-2">
+                <div>
+                  <div className="text-[14px] font-bold">Also in Story&amp;House (ebooks)</div>
+                  <div className="text-2 text-[13px]">Stays in Sales with all their current leads, and can also be given Story&amp;House leads.</div>
+                </div>
+                <Switch checked={form.both} onChange={(v) => set('both', v)} />
               </div>
             )}
             {form.role === 'sales' && (
