@@ -21,7 +21,8 @@ const ROLE: Record<Role, { label: string; tone: Tone; hint: string }> = {
   client: { label: 'Client', tone: 'warn', hint: 'Their own project portal only' },
   setter: { label: 'Appointment setter', tone: 'iris', hint: 'Outreach only: their prospect list on their phone' },
 };
-const DEPTS = ['sales', 'development', 'design', 'marketing', 'management', 'operations'];
+const DEPTS = ['sales', 'story_house', 'development', 'design', 'marketing', 'management', 'operations'];
+const deptLabel = (d: string) => (d === 'story_house' ? 'Story&House (ebooks)' : d.charAt(0).toUpperCase() + d.slice(1));
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const fmtShift = (start?: string | null, mins?: number | null) => {
@@ -81,7 +82,7 @@ export default function AdminPeople() {
                   <div className="text-2 truncate text-[13px]">{p.title ?? '—'}</div>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     <Pill tone={ROLE[p.role].tone}>{ROLE[p.role].label}</Pill>
-                    {p.department && <Pill tone="neutral">{p.department}</Pill>}
+                    {p.department && <Pill tone="neutral">{deptLabel(p.department)}</Pill>}
                     {p.is_technical_manager && <Pill tone="iris">Tech manager</Pill>}
                     {p.is_sales_lead && <Pill tone="info">Sales lead</Pill>}
                     {!p.is_active && <Pill tone="bad" solid>Off</Pill>}
@@ -230,11 +231,11 @@ function PersonSheet({ person, onClose, work, onHandOver }: {
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Full name" value={form.full_name} onChange={(e) => set('full_name', e.target.value)} autoFocus={isNew} />
             <Input label="Email (their username)" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
-            <Picker label="Role" value={form.role} onChange={(v) => setForm((f) => f && ({ ...f, role: v, department: v === 'sales' ? 'sales' : v === 'admin' ? 'management' : f.department }))}
+            <Picker label="Role" value={form.role} onChange={(v) => setForm((f) => f && ({ ...f, role: v, department: v === 'sales' ? (f.department === 'story_house' ? 'story_house' : 'sales') : v === 'admin' ? 'management' : f.department }))}
               options={(Object.keys(ROLE) as Role[]).map((r) => ({ value: r, label: ROLE[r].label, hint: ROLE[r].hint }))} disabled={p?.id === profile?.id} />
-            {staff && (
+            {(staff || form.role === 'sales') && (
               <Picker label="Department" value={form.department} onChange={(v) => set('department', v)}
-                options={DEPTS.map((d) => ({ value: d, label: d.charAt(0).toUpperCase() + d.slice(1) }))} />
+                options={(form.role === 'sales' ? ['sales', 'story_house'] : DEPTS).map((d) => ({ value: d, label: deptLabel(d) }))} />
             )}
             <Input label="Job title" value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="e.g. Sales Executive" />
             <Input label="Phone" value={form.phone} onChange={(e) => set('phone', e.target.value)} />

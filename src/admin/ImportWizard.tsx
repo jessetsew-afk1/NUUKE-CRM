@@ -74,19 +74,19 @@ const text = (v: Cell) => (v === null || v === undefined ? '' : v instanceof Dat
 type Assign = 'none' | 'single' | 'round_robin' | 'sheet';
 
 /** Import a lead sheet, or (chosen on the first step) a cold call sheet. */
-export function ImportWizard({ open, onClose, reps, startWith = 'leads' }: {
-  open: boolean; onClose: () => void; reps: Profile[]; startWith?: ImportKindValue;
+export function ImportWizard({ open, onClose, reps, startWith = 'leads', brand = 'nuuke' }: {
+  open: boolean; onClose: () => void; reps: Profile[]; startWith?: ImportKindValue; brand?: 'nuuke' | 'story_house';
 }) {
   const [kind, setKind] = useState<ImportKindValue>(startWith);
   useEffect(() => { if (open) setKind(startWith); }, [open, startWith]);
   const done = () => { setKind('leads'); onClose(); };
   return kind === 'cold'
     ? <ColdSheetImport open={open} onClose={done} reps={reps} kind={kind} onKind={setKind} />
-    : <LeadImport open={open} onClose={done} reps={reps} kind={kind} onKind={setKind} />;
+    : <LeadImport open={open} onClose={done} reps={reps} kind={kind} onKind={setKind} brand={brand} />;
 }
 
-function LeadImport({ open, onClose, reps, kind, onKind }: {
-  open: boolean; onClose: () => void; reps: Profile[]; kind: ImportKindValue; onKind: (k: ImportKindValue) => void;
+function LeadImport({ open, onClose, reps, kind, onKind, brand }: {
+  open: boolean; onClose: () => void; reps: Profile[]; kind: ImportKindValue; onKind: (k: ImportKindValue) => void; brand: 'nuuke' | 'story_house';
 }) {
   const [step, setStep] = useState(0);
   const [fileName, setFileName] = useState('');
@@ -226,6 +226,7 @@ function LeadImport({ open, onClose, reps, kind, onKind }: {
     setProgress({ done: 0, inserted: 0, duplicates: 0, invalid: 0 });
     try {
       const importId = await rpc<number>('start_lead_import', { p_file_name: fileName, p_total: total });
+      if (brand !== 'nuuke') await rpc('set_import_brand' as never, { p_import_id: importId, p_brand: brand } as never);
       let acc = { done: 0, inserted: 0, duplicates: 0, invalid: 0 };
       const CHUNK = 1000;
       for (let i = 0; i < total; i += CHUNK) {

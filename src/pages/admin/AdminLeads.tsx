@@ -13,7 +13,7 @@ import { TidySheet } from '@/admin/TidySheet';
 import { ColdSheets } from '@/admin/ColdSheets';
 import { useLeadSheets } from '@/data/sheets';
 import { AgentAvatar } from '@/shell/AgentAvatar';
-import { Button, Chip, Input, PageHeader, Panel, Picker, Pill, Sheet, Skeleton } from '@/ui/kit';
+import { Button, Chip, Input, PageHeader, Panel, Picker, Pill, Segmented, Sheet, Skeleton } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { ago, count, dayShort } from '@/lib/format';
 import { LeadCard } from '@/sales/LeadCard';
@@ -22,11 +22,14 @@ interface Filter {
   q: string; service: string | null; platform: string | null; stage: string | null; assigned: string | null; import_id: string | null;
   sheet: string | null;
 }
+type Brand = 'nuuke' | 'story_house';
+export const BRAND_LABEL: Record<Brand, string> = { nuuke: 'NUUKE', story_house: 'Story&House' };
 const PAGE = 50;
 
 export default function AdminLeads() {
   const [f, setF] = useState<Filter>({ q: '', service: null, platform: null, stage: null, assigned: null, import_id: null, sheet: null });
   const [q, setQ] = useState('');
+  const [brand, setBrand] = useState<Brand>('nuuke');
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
@@ -39,7 +42,8 @@ export default function AdminLeads() {
   const sheetName = useMemo(() => new Map((sheets.data ?? []).map((s) => [s.id, s.name])), [sheets.data]);
   const [open, setOpen] = useState<Lead | null>(null);
   const people = usePeople();
-  const reps = (people.data ?? []).filter((p) => p.role === 'sales' && p.is_active);
+  const reps = (people.data ?? []).filter((p) => p.role === 'sales' && p.is_active
+    && (brand === 'story_house' ? p.department === 'story_house' : p.department !== 'story_house'));
   const byId = useMemo(() => new Map((people.data ?? []).map((p) => [p.id, p])), [people.data]);
   const outcomes = useOutcomes();
   const omap = useMemo(() => outcomeMap(outcomes.data), [outcomes.data]);
@@ -48,7 +52,8 @@ export default function AdminLeads() {
   const toast = useToast();
 
   useEffect(() => { const t = window.setTimeout(() => setF((c) => ({ ...c, q })), 250); return () => window.clearTimeout(t); }, [q]);
-  useEffect(() => { setPage(0); setSelected(new Set()); setAllMatching(false); }, [f]);
+  useEffect(() => { setPage(0); setSelected(new Set()); setAllMatching(false); }, [f, brand]);
+  useEffect(() => { setF((c) => ({ ...c, assigned: null, import_id: null, sheet: null })); }, [brand]);
 
   const options = useQuery({
     queryKey: ['admin-lead-options'],
@@ -60,10 +65,10 @@ export default function AdminLeads() {
   });
 
   const list = useQuery({
-    queryKey: ['admin-leads', f, page],
+    queryKey: ['admin-leads', f, page, brand],
     placeholderData: (prev) => prev,
     queryFn: async () => {
-      let qb = supabase.from('leads').select('*', { count: 'exact' });
+      let qb = supabase.from('leads').select('*', { count: 'exact' }).eq('brand' as never, brand);
       if (f.q.trim()) {
         const t = f.q.trim().replace(/[%,()]/g, ' ');
         qb = qb.or(`name.ilike.%${t}%,phone.ilike.%${t}%,personal_email.ilike.%${t}%`);
@@ -88,7 +93,7 @@ export default function AdminLeads() {
   const selCount = allMatching ? total : selected.size;
 
   const rpcFilter = () => {
-    const out: Record<string, string> = {};
+    const out: Record<string, string> = { brand };
     if (f.q.trim()) out.q = f.q.trim();
     if (f.service) out.service = f.service;
     if (f.platform) out.platform = f.platform;
@@ -126,7 +131,10 @@ export default function AdminLeads() {
 
   return (
     <>
-      <PageHeader title="Leads & import" sub="Upload the lead sheet, hand leads to reps, and keep the pipeline fed."
+      <Segmented className="mb-3" value={brand} onChange={setBrand}
+        options={[{ value: 'nuuke', label: 'NUUKE' }, { value: 'story_house', label: 'Story&House (ebooks)' }]} />
+      <PageHeader title={brand === 'story_house' ? 'Story&House leads' : 'Leads & import'}
+        sub={brand === 'story_house' ? 'Ebooks department only. Imports here go to Story&House agents.' : 'Upload the lead sheet, hand leads to reps, and keep the pipeline fed.'}
         right={<>
           <Button variant="glass" icon={<Eraser className="size-4" />} onClick={() => setTidying(true)}>Remove repeats</Button>
           <Button variant="glass" icon={<PhoneOutgoing className="size-4" />} onClick={() => setColdOpen(true)}>Cold call sheets</Button>
@@ -135,7 +143,7 @@ export default function AdminLeads() {
 
       {imports.data && imports.data.length > 0 && (
         <div className="scroll-x no-scrollbar -mx-1 mb-4 flex gap-2 px-1">
-          {imports.data.slice(0, 6).map((im) => (
+          {imports.data.filter((im) => ((im as { brand?: string }).brand ?? 'nuuke') === brand).slice(0, 6).map((im) => (
             <button key={im.id} type="button" onClick={() => setF((c) => ({ ...c, import_id: c.import_id === String(im.id) ? null : String(im.id) }))}
               className={clsx('glass shrink-0 rounded-2xl px-3.5 py-2 text-left text-[12px]', f.import_id === String(im.id) && 'ring-2 ring-iris')}>
               <div className="max-w-[220px] truncate text-[13px] font-bold">{im.file_name}</div>
@@ -242,7 +250,7 @@ export default function AdminLeads() {
       </AnimatePresence>
 
       <AssignSheet open={assigning} onClose={() => setAssigning(false)} reps={reps} count={selCount} onAssign={assign} />
-      <ImportWizard open={importing} onClose={() => setImporting(false)} reps={reps} startWith={importCold ? 'cold' : 'leads'} />
+      <ImportWizard open={importing} onClose={() => setImporting(false)} reps={reps} startWith={importCold ? 'cold' : 'leads'} brand={brand} />
       <ColdSheets open={coldOpen} onClose={() => setColdOpen(false)} reps={reps}
         onImport={() => { setColdOpen(false); setImportCold(true); setImporting(true); }}
         onShowLeads={(id) => { setColdOpen(false); setF((c) => ({ ...c, sheet: String(id) })); }} />
