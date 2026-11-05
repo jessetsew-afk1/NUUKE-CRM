@@ -43,7 +43,7 @@ export default function AdminLeads() {
   const [open, setOpen] = useState<Lead | null>(null);
   const people = usePeople();
   const reps = (people.data ?? []).filter((p) => p.role === 'sales' && p.is_active
-    && (brand === 'story_house' ? p.department === 'story_house' : p.department !== 'story_house'));
+    && (brand === 'story_house' ? p.department === 'story_house' || p.also_story_house : p.department !== 'story_house'));
   const byId = useMemo(() => new Map((people.data ?? []).map((p) => [p.id, p])), [people.data]);
   const outcomes = useOutcomes();
   const omap = useMemo(() => outcomeMap(outcomes.data), [outcomes.data]);
