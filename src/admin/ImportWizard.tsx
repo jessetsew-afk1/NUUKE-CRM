@@ -342,7 +342,12 @@ function LeadImport({ open, onClose, reps, kind, onKind, brand }: {
                 ))}
               </div>
 
-              {assign === 'round_robin' && (
+              {reps.length === 0 && (
+                <div className="fill rounded-[18px] p-3.5 text-[13px]">
+                  No agents in {brand === 'story_house' ? 'Story&House' : 'this team'} yet. In Team &amp; access, open each agent and set Department to “Story&amp;House (ebooks)”, then come back. Or pick “Leave unassigned” and hand them out later.
+                </div>
+              )}
+              {assign === 'round_robin' && reps.length > 0 && (
                 <div>
                   <div className="label">Reps to share between · {rr.length ? `about ${count(Math.ceil(unique.length / rr.length))} each, every client to one rep` : 'pick at least one'}</div>
                   <div className="flex flex-wrap gap-2">
