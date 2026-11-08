@@ -114,6 +114,16 @@ agent for every person who signs in.
 - **Pay & attendance:** an estimated payslip with every deduction explained, plus an attendance calendar for the 20th–20th period.
 - **My agent:** dress up your agent. Items: 12 skin tones, 11 hairstyles including hijab, 11 headwear options, 9 outfits including kurta, glasses, sidekick pets and backdrops. Rare items unlock by hitting milestones.
 
+**Owner only: Finance vault** (`/admin/vault`)
+- Only the owner's login (the email in `vault_config.owner_email`, `jesse@nuuke.us`) sees it, and only after typing a passcode the owner sets the first time. Anyone else, even another admin or someone who changes their email, is refused. The vault is pinned to the owner's account when the passcode is first set.
+  - The vault tables have no API access at all; everything goes through functions that check the owner and a 30-minute unlock token. Five wrong passcodes lock it for 15 minutes; every attempt is in the access log (Settings).
+  - Forgot the passcode? Reset it in the database: `update vault_config set passcode_hash = null, owner_id = null;` then set a new one.
+- **Money in & out:** one line per item per month: revenue, refunds, cost of delivery, commissions, salaries, rent, marketing, software, other expenses, depreciation, interest, taxes, equipment, investment received, capital returned and profit share paid. Each picks a type you name yourself (Settings → Types of money); USD or PKR at a saved rate; repeating lines copy to next month in one click; **Pull from the CRM** offers the month's payments, won deals, PayPal fees, refunds, commissions and salaries on file.
+- **Monthly numbers:** agents, staff, leads, meetings, clients closed/active/lost, billable hours and the month-end balance sheet (cash, receivables, payables, loans…), for the company or each investor team.
+- **Overview, Statements, Metrics & ratios:** everything is worked out from those two, so one change updates every figure. P&L, cash flow and balance sheet; 84 metrics (ROI, CAC, CTI, LTV:CAC, margins, EBITDA, churn, runway, break-even, DSO, current ratio, IRR…), each with a one-line definition, formula and benchmark. **Simple** shows the key ones in plain words; **Pro** shows everything.
+- **Investors:** a card each with their investment, profit share % (of net profit, gross profit or revenue), losses carried forward or not, target return and agreement. Their panel shows the month (revenue, gross profit, agents, clients closed, commissions, rent, expenses, their share), month-by-month account, ROI, yearly ROI, total value multiple, IRR and payback. **Monthly report PDF** downloads a one-page statement for them.
+- **Glossary:** ~140 accounting, investor, legal and tax terms in one line each. **Company report PDF** follows Simple/Pro.
+
 **Admin**
 - **Overview:** who's online, on break, late or missing; today's floor numbers; alerts; top closers; lead health; payroll estimate.
 - **Leads & import:** upload the Google Sheet as CSV or Excel.
@@ -210,7 +220,7 @@ Demo logins (password `NuukeDemo!2026`):
 | Production | `faisal@nuuke.test`, `ayesha@nuuke.test`, `umar@nuuke.test` |
 | Clients | `sarah@halcyon.test` (two projects), `leo@brightbrew.test` |
 
-`node scripts/check-rules.mjs` signs in as different people and checks 215 permission and business rules.
+`node scripts/check-rules.mjs` signs in as different people and checks 227 permission and business rules.
 For example:
 - a rep cannot see a colleague's leads or pay
 - a client never sees internal tasks, files, or another client's project

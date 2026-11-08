@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   BarChart3, CalendarDays, ClipboardList, Columns3, Eye, FileSpreadsheet, FolderKanban, Gauge, Headphones, History, Kanban,
-  CreditCard, LayoutDashboard, ListTodo, Mic, ListChecks, Megaphone, MessagesSquare, MessageSquareText, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles, Gamepad2,
+  CreditCard, Landmark, LayoutDashboard, ListTodo, Mic, ListChecks, Megaphone, MessagesSquare, MessageSquareText, Rocket, Settings, Shirt, Trophy, Users, Video, Wallet, Clock, Inbox, Sparkles, Gamepad2,
 } from 'lucide-react';
 import type { Role } from '@/lib/types';
 
@@ -22,6 +22,8 @@ export interface NavContext {
   texts?: boolean; textsToSend?: number;
   /** A salesperson an admin made a sales lead: they get the Team page. */
   salesLead?: boolean;
+  /** The company owner's account: gets the private finance vault. */
+  vault?: boolean;
 }
 export interface NavGroup { label: string; items: NavItem[] }
 
@@ -54,6 +56,9 @@ export function navFor(role: Role, ctx: NavContext = {}): NavGroup[] {
     const at = role === 'sales' ? sales.findIndex((x) => x.to === '/sales/meetings') : sales.length;
     // Setters work from a phone, so Texts sits in their bottom bar.
     sales.splice(at, 0, { to: '/sales/texts', label: 'Texts', icon: i(MessageSquareText), badge: ctx.textsToSend, mobile: role === 'setter' });
+  }
+  if (role === 'admin' && ctx.vault) {
+    groups.splice(groups.length - 1, 0, { label: 'Private', items: [{ to: '/admin/vault', label: 'Finance vault', short: 'Vault', icon: i(Landmark) }] });
   }
   if (role === 'sales' && ctx.salesLead) {
     groups[0].items.push({ to: '/team', label: 'Team', icon: i(Users) });

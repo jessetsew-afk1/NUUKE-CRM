@@ -946,6 +946,40 @@ const faisal = await as('faisal@nuuke.test');
   await service.from('profiles').update({ is_sales_lead: false }).eq('id', hamza.id);
 }
 
+// ---- finance vault: only the owner's account, only with the passcode
+{
+  const service = createClient(URL_, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
+  await service.from('vault_sessions').delete().neq('token_hash', '');
+  await service.from('vault_config').update({ owner_email: 'admin@nuuke.test', owner_id: null, passcode_hash: null, failed: 0, locked_until: null }).eq('id', 1);
+  const { error: direct } = await admin.c.from('vault_entries').select('id').limit(1);
+  ok(!!direct, 'Nobody can read the vault tables directly, not even the owner');
+  const { data: st } = await zoya.c.rpc('vault_status');
+  ok(st?.owner === false, "A rep doesn't even learn whether the vault exists");
+  const { data: setByRep } = await zoya.c.rpc('vault_set_passcode', { p_new: 'repcode1', p_old: null });
+  ok(setByRep?.ok === false, "A rep can't set the vault passcode");
+  const { data: set1 } = await admin.c.rpc('vault_set_passcode', { p_new: 'vaultcode1', p_old: null });
+  ok(set1?.ok === true, 'The owner sets the passcode');
+  const { data: unlockRep } = await zoya.c.rpc('vault_unlock', { p_passcode: 'vaultcode1' });
+  ok(unlockRep?.ok === false, "Someone else can't open the vault even with the right passcode");
+  const { error: noToken } = await admin.c.rpc('vault_load', { p_token: 'not-a-token' });
+  ok(!!noToken, 'The owner still needs the passcode: no unlock, no data');
+  const { data: wrong } = await admin.c.rpc('vault_unlock', { p_passcode: 'nope' });
+  ok(wrong?.ok === false && wrong?.tries_left === 4, 'A wrong passcode is refused and counted', JSON.stringify(wrong));
+  const { data: good } = await admin.c.rpc('vault_unlock', { p_passcode: 'vaultcode1' });
+  const { data: loaded, error: le } = await admin.c.rpc('vault_load', { p_token: good?.token });
+  ok(!le && Array.isArray(loaded?.categories), 'The right passcode opens it');
+  const { error: stolen } = await zoya.c.rpc('vault_load', { p_token: good?.token });
+  ok(!!stolen, "Another account can't use the owner's unlock token");
+  for (const p of ['a1', 'a2', 'a3', 'a4', 'a5']) await admin.c.rpc('vault_unlock', { p_passcode: p });
+  const { data: locked } = await admin.c.rpc('vault_unlock', { p_passcode: 'vaultcode1' });
+  ok(locked?.error === 'Locked', 'Five wrong passcodes lock the vault for 15 minutes');
+  await admin.c.rpc('vault_lock', { p_token: good?.token });
+  const { error: afterLock } = await admin.c.rpc('vault_load', { p_token: good?.token });
+  ok(!!afterLock, 'Locking ends the session');
+  await service.from('vault_config').update({ owner_email: 'jesse@nuuke.us', owner_id: null, passcode_hash: null, failed: 0, locked_until: null }).eq('id', 1);
+  await service.from('vault_sessions').delete().neq('token_hash', '');
+}
+
 // ---- clean up the clock-in so the demo starts fresh
 await zoya.c.rpc('clock_out');
 console.log(failed ? `\n${failed} check(s) failed` : '\nAll checks passed');
