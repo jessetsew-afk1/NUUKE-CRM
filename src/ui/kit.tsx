@@ -299,7 +299,6 @@ export function Segmented<V extends string>({
   className?: string;
   size?: 'sm' | 'md';
 }) {
-  const id = useId();
   return (
     <div className={clsx('fill inline-flex rounded-[14px] p-1', className)} role="tablist">
       {options.map((o) => (
@@ -315,9 +314,12 @@ export function Segmented<V extends string>({
             o.value === value ? 'text-[color:var(--text)]' : 'text-2 hover:text-[color:var(--text)]',
           )}
         >
+          {/* A plain pill, not a shared-layout (layoutId) one: a layout animation inside a closing
+              Sheet kept the sheet mounted (invisible) on top of the page, swallowing clicks. */}
           {o.value === value && (
             <motion.span
-              layoutId={`seg-${id}`}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
               transition={spring}
               className="absolute inset-0 rounded-[11px] bg-[var(--glass-strong)] shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
             />
