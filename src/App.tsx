@@ -42,6 +42,7 @@ const AdminAttendance = lazy(() => import('@/pages/admin/AdminAttendance'));
 const AdminPayroll = lazy(() => import('@/pages/admin/AdminPayroll'));
 const AdminAudit = lazy(() => import('@/pages/admin/AdminAudit'));
 const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'));
+const VaultPage = lazy(() => import('@/pages/admin/vault/VaultPage'));
 
 export const HOME: Record<Role, string> = { admin: '/admin', sales: '/sales', production: '/work', client: '/portal', setter: '/outreach' };
 
@@ -121,6 +122,7 @@ export default function App() {
             <Route path="/admin/payroll" element={<Only roles={A}><AdminPayroll /></Only>} />
             <Route path="/admin/audit" element={<Only roles={A}><AdminAudit /></Only>} />
             <Route path="/admin/settings" element={<Only roles={A}><AdminSettings /></Only>} />
+            <Route path="/admin/vault" element={<Only roles={A}><VaultPage /></Only>} />
 
             <Route path="*" element={<Navigate to={HOME[profile.role]} replace />} />
           </Routes>
