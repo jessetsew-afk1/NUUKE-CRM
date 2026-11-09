@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { ArrowLeft, Banknote, FileDown, HandCoins, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Banknote, FileDown, HandCoins, Pencil, Plus, Trash2, Users, Wallet } from 'lucide-react';
 import { usePeople } from '@/data/common';
 import { useVaultMutations } from '@/data/vault';
 import {
@@ -10,6 +10,7 @@ import { Button, Chip, Empty, Input, Panel, PanelHeader, Picker, Pill, ProgressB
 import { useToast } from '@/ui/toast';
 import { CrmPull, EntryEditor, EntryTable } from './Ledger';
 import { Numbers } from './Numbers';
+import { PaymentEditor, type PaymentDraft } from './Payment';
 import { ProfitAndLoss } from './Statements';
 import { Def, monthOptions, show, thisMonth, useV } from './parts';
 
@@ -80,6 +81,7 @@ function InvestorDetail({ inv, onBack }: { inv: VInvestor; onBack: () => void })
   const { data, months, mode, knownMonths } = useV();
   const [editing, setEditing] = useState<Partial<VInvestor> | null>(null);
   const [entry, setEntry] = useState<Partial<VEntry> | null>(null);
+  const [paying, setPaying] = useState<PaymentDraft | null>(null);
   const [reportMonth, setReportMonth] = useState(months[months.length - 1]);
   const [exporting, setExporting] = useState(false);
   const [section, setSection] = useState<'month' | 'statement' | 'entries' | 'numbers' | 'team' | 'terms'>('month');
@@ -156,7 +158,10 @@ function InvestorDetail({ inv, onBack }: { inv: VInvestor; onBack: () => void })
         <Panel padded={false}>
           <div className="flex items-center justify-between gap-3 p-5 pb-2">
             <PanelHeader className="!mb-0" title="Money in & out for this team" sub="Revenue, commissions, rent, expenses, taxes, investment and payouts" />
-            <Button variant="iris" icon={<Plus className="size-4" />} onClick={() => setEntry({ month: reportMonth, investor_id: inv.id, kind: 'revenue' })}>Add</Button>
+            <div className="flex gap-2">
+              <Button variant="glass" icon={<Plus className="size-4" />} onClick={() => setEntry({ month: reportMonth, investor_id: inv.id, kind: 'expense' })}>Other money</Button>
+              <Button variant="iris" icon={<Wallet className="size-4" />} onClick={() => setPaying({ month: reportMonth, investor_id: inv.id })}>Log a client payment</Button>
+            </div>
           </div>
           {entries.length ? <EntryTable rows={entries} onEdit={setEntry} hideWho /> : <Empty title="Nothing recorded for this team yet" />}
         </Panel>
@@ -186,6 +191,7 @@ function InvestorDetail({ inv, onBack }: { inv: VInvestor; onBack: () => void })
 
       <InvestorEditor value={editing} onClose={() => setEditing(null)} onDeleted={onBack} />
       <EntryEditor value={entry} onClose={() => setEntry(null)} lockInvestor />
+      <PaymentEditor draft={paying} onClose={() => setPaying(null)} />
       {exporting && (
         <Suspense fallback={null}>
           <Exporter kind="investor" ctx={ctxForPdf} investorId={inv.id} month={reportMonth} onDone={() => setExporting(false)} />

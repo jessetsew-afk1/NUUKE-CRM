@@ -118,6 +118,7 @@ agent for every person who signs in.
 - Only the owner's login (the email in `vault_config.owner_email`, `jesse@nuuke.us`) sees it, and only after typing a passcode the owner sets the first time. Anyone else, even another admin or someone who changes their email, is refused. The vault is pinned to the owner's account when the passcode is first set.
   - The vault tables have no API access at all; everything goes through functions that check the owner and a 30-minute unlock token. Five wrong passcodes lock it for 15 minutes; every attempt is in the access log (Settings).
   - Forgot the passcode? Reset it in the database: `update vault_config set passcode_hash = null, owner_id = null;` then set a new one.
+- **Log a client payment:** one form for one payment's whole trip: what the client paid ($ or £), each fee and tax taken off (a % and/or a fixed amount: PayPal fee, merchant fee, withholding tax…), the route ($ → £ → Rs, $ → Rs or £ → Rs) with the rates you got, bank charges, and optionally what actually landed. A live "money's journey" shows each step, what you kept and your real rate. Saving writes the revenue, each fee and tax, the conversion cost (against the market rate) and bank charges as separate lines that add up to what landed. It shows as one row and edits as one; the last rates and fees are remembered.
 - **Money in & out:** one line per item per month: revenue, refunds, cost of delivery, commissions, salaries, rent, marketing, software, other expenses, depreciation, interest, taxes, equipment, investment received, capital returned and profit share paid. Each picks a type you name yourself (Settings → Types of money); USD or PKR at a saved rate; repeating lines copy to next month in one click; **Pull from the CRM** offers the month's payments, won deals, PayPal fees, refunds, commissions and salaries on file.
 - **Monthly numbers:** agents, staff, leads, meetings, clients closed/active/lost, billable hours and the month-end balance sheet (cash, receivables, payables, loans…), for the company or each investor team.
 - **Overview, Statements, Metrics & ratios:** everything is worked out from those two, so one change updates every figure. P&L, cash flow and balance sheet; 84 metrics (ROI, CAC, CTI, LTV:CAC, margins, EBITDA, churn, runway, break-even, DSO, current ratio, IRR…), each with a one-line definition, formula and benchmark. **Simple** shows the key ones in plain words; **Pro** shows everything.
@@ -220,7 +221,7 @@ Demo logins (password `NuukeDemo!2026`):
 | Production | `faisal@nuuke.test`, `ayesha@nuuke.test`, `umar@nuuke.test` |
 | Clients | `sarah@halcyon.test` (two projects), `leo@brightbrew.test` |
 
-`node scripts/check-rules.mjs` signs in as different people and checks 227 permission and business rules.
+`node scripts/check-rules.mjs` signs in as different people and checks 230 permission and business rules.
 For example:
 - a rep cannot see a colleague's leads or pay
 - a client never sees internal tasks, files, or another client's project

@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { Info, TrendingDown, TrendingUp } from 'lucide-react';
+import { animate, motion } from 'framer-motion';
 import type { VaultData } from '@/data/vault';
 import {
   addMonths, buildReport, fmtValue, type Report, metricDef, monthKey, monthLabel, monthRange, type Fmt, type PnL,
 } from '@/lib/finance';
-import { Picker, Segmented } from '@/ui/kit';
+import { Picker, Segmented, spring } from '@/ui/kit';
 
 /* ================================================================ context */
 export type Mode = 'simple' | 'pro';
@@ -99,31 +100,78 @@ export function Def({ text, formula, good, className }: { text: ReactNode; formu
   );
 }
 
-/** A metric from the registry, as a tile. */
-export function MetricTile({ k, value, compare, big, className }: { k: string; value: number | null | undefined; compare?: number | null; big?: boolean; className?: string }) {
+/** Each group of metrics has its own colour, so the page reads at a glance. */
+export const GROUP_COLOR: Record<string, string> = {
+  'Profit & loss': '#30C46C', Margins: '#7C5CFF', Growth: '#00C2D1', 'Clients & sales': '#FF9F43',
+  'Team & productivity': '#54A0FF', 'Cash & liquidity': '#1DD1A1', 'Returns & balance sheet': '#F368E0', Tax: '#EE5253',
+};
+
+/** A number that counts up to its value. */
+export function CountUp({ value, fmt, className }: { value: number | null | undefined; fmt: Fmt; className?: string }) {
+  const [shown, setShown] = useState<number | null>(value ?? null);
+  const last = useRef<number>(0);
+  useEffect(() => {
+    if (value == null || !Number.isFinite(value)) { setShown(null); return; }
+    const from = last.current; last.current = value;
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { setShown(value); return; }
+    const c = animate(from, value, { duration: 0.9, ease: [0.16, 1, 0.3, 1], onUpdate: (v) => setShown(v) });
+    return () => c.stop();
+  }, [value]);
+  return <span className={className}>{fmtValue(shown, fmt)}</span>;
+}
+
+/** A tiny trend line. */
+export function Sparkline({ values, color, height = 34, className }: { values: (number | null)[]; color: string; height?: number; className?: string }) {
+  const pts = values.map((v) => (v == null || !Number.isFinite(v) ? null : v));
+  const real = pts.filter((v): v is number => v != null);
+  if (real.length < 2) return null;
+  const min = Math.min(...real); const max = Math.max(...real);
+  const w = 120; const h = height; const span = max - min || 1;
+  const xy = pts.map((v, i) => (v == null ? null : [(i / (pts.length - 1)) * w, h - 3 - ((v - min) / span) * (h - 6)] as const)).filter(Boolean) as (readonly [number, number])[];
+  const id = `sp${color.replace('#', '')}${real.length}`;
+  const line = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className={clsx('block w-full', className)} style={{ height }} aria-hidden>
+      <defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".35" /><stop offset="100%" stopColor={color} stopOpacity="0" /></linearGradient></defs>
+      <path d={`${line} L${xy[xy.length - 1][0]},${h} L${xy[0][0]},${h} Z`} fill={`url(#${id})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={xy[xy.length - 1][0]} cy={xy[xy.length - 1][1]} r={2.6} fill={color} />
+    </svg>
+  );
+}
+
+/** A metric from the registry, as a tile: coloured by its group, counting up, with its recent trend. */
+export function MetricTile({ k, value, compare, big, className, series }: {
+  k: string; value: number | null | undefined; compare?: number | null; big?: boolean; className?: string; series?: (number | null)[];
+}) {
   const { mode } = useV();
   const d = metricDef(k);
   if (!d) return null;
+  const color = GROUP_COLOR[d.group] ?? '#7C5CFF';
   const delta = compare != null && value != null && compare !== 0 ? (value - compare) / Math.abs(compare) : null;
   const good = delta == null || !d.better ? null : d.better === 'higher' ? delta >= 0 : delta <= 0;
   return (
-    <div className={clsx('glass relative rounded-[22px] p-4', className)}>
-      <div className="text-2 flex items-start gap-1 text-[12px] font-semibold uppercase leading-tight tracking-wide">
+    <motion.div whileHover={{ y: -3 }} transition={spring}
+      className={clsx('glass group relative overflow-hidden rounded-[22px] p-4', className)}>
+      <div className="pointer-events-none absolute -right-10 -top-12 size-32 rounded-full opacity-[.22] blur-2xl transition-opacity group-hover:opacity-40" style={{ background: color }} />
+      <div className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${color}, transparent)` }} />
+      <div className="text-2 relative flex items-start gap-1 text-[11.5px] font-bold uppercase leading-tight tracking-wide">
         <span className="line-clamp-2">{d.name}{d.abbr && mode === 'pro' && !d.name.toUpperCase().includes(d.abbr.toUpperCase()) ? ` · ${d.abbr}` : ''}</span>
         <Def text={d.def} formula={mode === 'pro' ? d.formula : undefined} good={d.good} />
       </div>
-      <div className={clsx('tabular mt-2 font-display font-extrabold leading-none tracking-tight', big ? 'text-[32px]' : 'text-[24px]', value != null && value < 0 && d.fmt === 'usd' && 'text-bad')}>
-        {fmtValue(value, d.fmt)}
+      <div className="relative mt-2 flex flex-wrap items-end justify-between gap-x-2 gap-y-1">
+        <CountUp value={value} fmt={d.fmt}
+          className={clsx('tabular font-display font-extrabold leading-none tracking-tight', big ? 'text-[26px] sm:text-[32px]' : 'text-[22px] sm:text-[24px]', value == null && 'text-3', value != null && value < 0 && d.fmt === 'usd' && 'text-bad')} />
+        {delta != null && (
+          <span className={clsx('mb-0.5 flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-extrabold', good ? 'bg-ok/15 text-ok' : 'bg-bad/15 text-bad')}>
+            {delta >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}{fmtValue(Math.abs(delta), 'pct')}
+          </span>
+        )}
       </div>
-      {delta != null && (
-        <div className={clsx('mt-2 flex items-center gap-1 text-[12px] font-bold', good ? 'text-ok' : 'text-bad')}>
-          {delta >= 0 ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
-          {fmtValue(delta, 'pct')} vs previous
-        </div>
-      )}
-      {value == null && d.needs && <div className="text-3 mt-2 text-[11.5px]">Needs: {d.needs}</div>}
-      {mode === 'simple' && value != null && <div className="text-3 mt-2 text-[12px] leading-snug">{d.def}</div>}
-    </div>
+      {series && <Sparkline className="relative mt-2" values={series} color={color} height={big ? 38 : 28} />}
+      {value == null && d.needs && <div className="text-3 relative mt-2 text-[11.5px]">Needs: {d.needs}</div>}
+      {mode === 'simple' && value != null && <div className="text-3 relative mt-2 line-clamp-2 text-[12px] leading-snug">{d.def}</div>}
+    </motion.div>
   );
 }
 
@@ -240,4 +288,46 @@ export function useReport(scope: 'company' | number, monthsOverride?: string[]):
     scope, months: ms, entries: data.entries, stats: data.stats, categories: data.categories, investors: data.investors,
     taxRate: data.settings.tax_rate != null ? Number(data.settings.tax_rate) / 100 : undefined,
   }), [scope, ms, data]);
+}
+
+/* ================================================================ waterfall */
+/** Revenue at the top, each cost taking its bite, net profit at the end. */
+export function Waterfall({ p, kinds }: { p: PnL; kinds: Record<string, number> }) {
+  const steps: { label: string; value: number; color: string; total?: boolean }[] = [
+    { label: 'Revenue', value: p.revenue, color: '#30C46C', total: true },
+    { label: 'Delivery & commissions', value: -p.costOfSales, color: '#FF9F43' },
+    { label: 'Salaries', value: -kinds.salary, color: '#7C5CFF' },
+    { label: 'Rent & office', value: -kinds.rent, color: '#54A0FF' },
+    { label: 'Marketing', value: -kinds.marketing, color: '#00C2D1' },
+    { label: 'Tools & other', value: -(kinds.software + kinds.expense), color: '#A29BFE' },
+    { label: 'Interest, depreciation', value: -(kinds.depreciation + kinds.interest - kinds.other_income), color: '#8395A7' },
+    { label: 'Tax', value: -kinds.tax, color: '#EE5253' },
+    { label: 'Net profit', value: p.netProfit, color: p.netProfit >= 0 ? '#1DD1A1' : '#EE5253', total: true },
+  ].filter((s) => s.total || Math.abs(s.value) >= 0.005);
+  const top = Math.max(1, p.revenue, ...steps.map((s) => Math.abs(s.value)));
+  const floor = Math.min(0, p.netProfit);
+  const span = top - floor || 1;
+  let run = 0;
+  const bars = steps.map((s) => {
+    let a: number; let b: number;
+    if (s.total) { a = 0; b = s.value; run = s.value; } else { a = run; b = run + s.value; run = b; }
+    return { ...s, lo: Math.min(a, b), hi: Math.max(a, b) };
+  });
+  const pct = (v: number) => ((v - floor) / span) * 100;
+  return (
+    <div className="space-y-2">
+      {bars.map((b, i) => (
+        <div key={b.label} className="grid grid-cols-[132px_1fr_88px] items-center gap-3 text-[12.5px] sm:grid-cols-[170px_1fr_96px]">
+          <span className={clsx('truncate', b.total ? 'font-extrabold' : 'text-2')}>{b.label}</span>
+          <div className="fill relative h-[22px] overflow-hidden rounded-lg">
+            <motion.div className="absolute inset-y-0 rounded-lg" style={{ background: b.total ? `linear-gradient(90deg, ${b.color}, ${b.color}cc)` : b.color, left: `${pct(b.lo)}%` }}
+              initial={{ width: 0 }} animate={{ width: `${Math.max(0.6, pct(b.hi) - pct(b.lo))}%` }} transition={{ duration: 0.7, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }} />
+          </div>
+          <span className={clsx('tabular text-right', b.total ? 'font-extrabold' : 'font-semibold', b.value < 0 && !b.total && 'text-2')}>
+            {b.value < 0 && !b.total ? '−' : ''}{fmtValue(Math.abs(b.value), 'usd')}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
