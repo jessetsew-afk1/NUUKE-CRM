@@ -1,7 +1,8 @@
+import { useMemo } from 'react';
 import { Sparkles } from 'lucide-react';
-import { KINDS, addMonths, fmtValue, investorLedger, investorSummary, monthRange, periodLabel, type Kind } from '@/lib/finance';
+import { KINDS, addMonths, buildReport, fmtValue, investorLedger, investorSummary, monthRange, periodLabel, type Kind } from '@/lib/finance';
 import { Panel, PanelHeader } from '@/ui/kit';
-import { MetricTile, MonthChart, SplitBar, show, useReport, useV } from './parts';
+import { MetricTile, MonthChart, SplitBar, Waterfall, show, useReport, useV } from './parts';
 
 const SIMPLE = ['revenue', 'total_costs', 'net_profit', 'retained_profit', 'gross_margin', 'net_margin', 'cti', 'new_clients', 'cac', 'ltv_cac', 'free_cash_flow', 'cash'];
 const PRO = ['revenue', 'gross_profit', 'ebitda', 'net_profit', 'gross_margin', 'ebitda_margin', 'net_margin', 'cti', 'revenue_growth', 'mrr',
@@ -20,6 +21,13 @@ export function Overview() {
     total_costs: prevM.costOfSales + prevM.opex + prevM.depreciation + prevM.interest + prevM.tax, free_cash_flow: prevM.freeCashFlow,
   } : {};
   const keys = mode === 'simple' ? SIMPLE : PRO;
+  // Each tile's last 8 months, for its little trend line.
+  const series = useMemo(() => {
+    const ms = monthRange(addMonths(end, -7), end);
+    const reps = ms.map((mm) => buildReport({ scope: 'company', months: [mm], entries: data.entries, stats: data.stats, categories: data.categories, investors: data.investors }));
+    const used = reps.map((x) => !!(x.pnl.revenue || x.pnl.opex || x.pnl.costOfSales));
+    return (k: string) => reps.map((x, i) => (used[i] ? x.metrics[k] ?? null : null));
+  }, [end, data]);
   const empty = !data.entries.length;
 
   const spend: Kind[] = ['direct_cost', 'commission', 'salary', 'rent', 'marketing', 'software', 'expense', 'depreciation', 'interest', 'tax'];
@@ -45,15 +53,22 @@ export function Overview() {
         </Panel>
       )}
 
-      <Panel>
-        <PanelHeader title="In plain words" sub={periodLabel(months)} />
-        <ul className="space-y-1.5 text-[14.5px] leading-relaxed">
-          {sentences.map((s) => <li key={s} className="flex gap-2"><span className="text-iris">•</span><span>{s}</span></li>)}
-        </ul>
-      </Panel>
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.15fr]">
+        <Panel className="relative overflow-hidden">
+          <div className="pointer-events-none absolute -left-10 -top-10 size-40 rounded-full bg-iris opacity-15 blur-3xl" />
+          <PanelHeader title={<span className="flex items-center gap-2"><Sparkles className="size-4 text-iris" />In plain words</span>} sub={periodLabel(months)} />
+          <ul className="relative space-y-2.5 text-[14.5px] leading-relaxed">
+            {sentences.map((s) => <li key={s} className="flex gap-2.5"><span className="mt-[9px] size-1.5 shrink-0 rounded-full bg-[linear-gradient(135deg,#7C5CFF,#5AB8FF)]" /><span>{s}</span></li>)}
+          </ul>
+        </Panel>
+        <Panel>
+          <PanelHeader title="Where every dollar went" sub="From what came in to what was left" />
+          <Waterfall p={p} kinds={r.kinds} />
+        </Panel>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-        {keys.map((k, i) => <MetricTile key={k} k={k} value={m[k]} compare={compare[k]} big={i < 4} />)}
+        {keys.map((k, i) => <MetricTile key={k} k={k} value={m[k]} compare={compare[k]} big={i < 4} series={series(k)} />)}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
@@ -62,7 +77,7 @@ export function Overview() {
           <MonthChart rows={chart.byMonth.filter((_, i) => i >= chart.byMonth.findIndex((y) => y.pnl.revenue || y.pnl.costOfSales || y.pnl.opex))} />
         </Panel>
         <Panel>
-          <PanelHeader title="Where the money went" sub={`${show(m.total_costs)} of costs`} />
+          <PanelHeader title="Costs by kind" sub={`${show(m.total_costs)} in total`} />
           <SplitBar parts={spend.map((k) => ({ label: KINDS[k].label, value: r.kinds[k], color: KINDS[k].color }))} />
         </Panel>
       </div>

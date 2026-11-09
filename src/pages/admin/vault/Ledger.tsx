@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { CopyPlus, DownloadCloud, Pencil, Plus, Repeat, Trash2 } from 'lucide-react';
+import { CopyPlus, DownloadCloud, Pencil, Plus, Repeat, Trash2, Wallet } from 'lucide-react';
 import { useVaultMutations, type CrmMonth } from '@/data/vault';
-import { INVESTOR_ONLY, KINDS, KIND_ORDER, monthLabel, periodLabel, type Kind, type VEntry } from '@/lib/finance';
+import { INVESTOR_ONLY, KINDS, KIND_ORDER, computePayment, fmtValue, monthLabel, periodLabel, type Kind, type VEntry } from '@/lib/finance';
 import { Button, Empty, Input, Panel, PanelHeader, Picker, Pill, Sheet, Switch, Textarea } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { monthOptions, show, useV } from './parts';
+import { PaymentEditor, type PaymentDraft } from './Payment';
 
 /* ================================================================ ledger */
 export function Ledger() {
@@ -13,12 +14,13 @@ export function Ledger() {
   const [kind, setKind] = useState<Kind | 'all'>('all');
   const [who, setWho] = useState<string>('all');
   const [editing, setEditing] = useState<Partial<VEntry> | null>(null);
+  const [paying, setPaying] = useState<PaymentDraft | null>(null);
   const { rollRecurring } = useVaultMutations();
   const toast = useToast();
   const set = useMemo(() => new Set(months), [months]);
   const rows = data.entries.filter((e) => set.has(e.month) && (kind === 'all' || e.kind === kind)
     && (who === 'all' || (who === 'company' ? e.investor_id == null : e.investor_id === Number(who))))
-    .sort((a, b) => b.month.localeCompare(a.month) || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
+    .sort((a, b) => b.month.localeCompare(a.month) || Number(!!b.payment_id) - Number(!!a.payment_id) || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
   const lastMonth = months[months.length - 1];
   const recurringHere = data.entries.filter((e) => e.month === lastMonth && e.recurring).length;
 
@@ -38,7 +40,8 @@ export function Ledger() {
                 toast({ title: n ? `${n} repeating ${n === 1 ? 'entry' : 'entries'} copied to ${monthLabel(addOne(lastMonth), true)}` : 'Already copied', tone: n ? 'success' : undefined });
               }}>Copy repeating to next month</Button>
             )}
-            <Button variant="iris" icon={<Plus className="size-4" />} onClick={() => setEditing({ month: period.preset === 'all' ? lastMonth : period.to, kind: 'revenue', investor_id: who !== 'all' && who !== 'company' ? Number(who) : null })}>Add money in / out</Button>
+            <Button variant="glass" icon={<Plus className="size-4" />} onClick={() => setEditing({ month: period.preset === 'all' ? lastMonth : period.to, kind: 'expense', investor_id: who !== 'all' && who !== 'company' ? Number(who) : null })}>Other money in / out</Button>
+            <Button variant="iris" icon={<Wallet className="size-4" />} onClick={() => setPaying({ month: period.preset === 'all' ? lastMonth : period.to, investor_id: who !== 'all' && who !== 'company' ? Number(who) : null })}>Log a client payment</Button>
           </div>
         </div>
       </Panel>
@@ -49,11 +52,12 @@ export function Ledger() {
         <div className="p-5 pb-2"><PanelHeader title="Entries" sub={`${periodLabel(months)} · ${rows.length} ${rows.length === 1 ? 'entry' : 'entries'}`} /></div>
         {!rows.length ? (
           <Empty title="Nothing here yet" body="Add revenue, salaries, rent, commissions, taxes… one line per item, per month."
-            action={<Button variant="iris" icon={<Plus className="size-4" />} onClick={() => setEditing({ month: lastMonth, kind: 'revenue', investor_id: null })}>Add the first entry</Button>} />
+            action={<Button variant="iris" icon={<Wallet className="size-4" />} onClick={() => setPaying({ month: lastMonth, investor_id: null })}>Log the first client payment</Button>} />
         ) : <EntryTable rows={rows} onEdit={setEditing} />}
       </Panel>
 
       <EntryEditor value={editing} onClose={() => setEditing(null)} />
+      <PaymentEditor draft={paying} onClose={() => setPaying(null)} />
     </div>
   );
 }
@@ -63,14 +67,48 @@ export function EntryTable({ rows, onEdit, hideWho }: { rows: VEntry[]; onEdit: 
   const { data } = useV();
   const cats = new Map(data.categories.map((c) => [c.id, c.name]));
   const invs = new Map(data.investors.map((i) => [i.id, i.name]));
+  const payments = new Map(data.payments.map((p) => [p.id, p]));
+  const [paying, setPaying] = useState<PaymentDraft | null>(null);
+  // A logged client payment shows once, as one row, however many lines it put in the books.
+  const seen = new Set<number>();
+  const items = rows.filter((e) => {
+    if (!e.payment_id || !payments.has(e.payment_id)) return true;
+    if (seen.has(e.payment_id)) return false;
+    seen.add(e.payment_id);
+    return true;
+  });
   return (
     <div className="scroll-x">
+      <PaymentEditor draft={paying} onClose={() => setPaying(null)} />
       <table className="w-full min-w-[720px] text-[13.5px]">
         <thead className="text-3 text-left text-[11.5px] font-bold uppercase tracking-wide">
           <tr><th className="px-5 py-2">Month</th><th>Kind</th><th>Type & description</th>{!hideWho && <th>Belongs to</th>}<th className="px-5 text-right">Amount</th><th /></tr>
         </thead>
         <tbody>
-          {rows.map((e) => {
+          {items.map((e) => {
+            const pay = e.payment_id ? payments.get(e.payment_id) : undefined;
+            if (pay) {
+              const res = computePayment(pay.details, data.categories);
+              const ccy = pay.details.route === 'GBP>PKR' ? '£' : '$';
+              return (
+                <tr key={`p${pay.id}`} className="group cursor-pointer border-t border-[color:var(--hairline,rgba(127,127,127,.15))] bg-[linear-gradient(90deg,rgba(48,196,108,.07),transparent_60%)] hover:bg-[var(--fill)]" onClick={() => setPaying({ payment: pay })}>
+                  <td className="whitespace-nowrap px-5 py-3">{monthLabel(pay.month)}</td>
+                  <td><span className="flex items-center gap-2 whitespace-nowrap font-semibold"><Wallet className="size-3.5 text-ok" />Client payment</span></td>
+                  <td className="max-w-[320px]">
+                    <div className="truncate font-semibold">{pay.client || 'Client'}{pay.details.label ? ` · ${pay.details.label}` : ''}</div>
+                    <div className="text-3 truncate text-[12px]">
+                      {ccy}{Number(pay.details.gross).toLocaleString()} paid → Rs {Math.round(res.landedPkr).toLocaleString()} landed · kept {fmtValue(res.keptPct, 'pct')} · {res.entries.length} lines
+                    </div>
+                  </td>
+                  {!hideWho && <td className="whitespace-nowrap">{pay.investor_id ? <Pill tone="iris">{invs.get(pay.investor_id) ?? 'Investor'}</Pill> : <span className="text-3">Company</span>}</td>}
+                  <td className="tabular whitespace-nowrap px-5 text-right font-bold text-ok">
+                    +{show(res.landedUsd)}
+                    <div className="text-3 text-[11px] font-medium">of {show(res.grossUsd)} billed</div>
+                  </td>
+                  <td className="pr-4 text-right"><Pencil className="text-3 ml-2 inline size-3.5 opacity-0 group-hover:opacity-100" /></td>
+                </tr>
+              );
+            }
             const k = KINDS[e.kind];
             const inflow = e.kind === 'revenue' || e.kind === 'other_income' || e.kind === 'capital_in';
             return (

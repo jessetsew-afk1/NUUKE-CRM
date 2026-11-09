@@ -968,6 +968,19 @@ const faisal = await as('faisal@nuuke.test');
   const { data: good } = await admin.c.rpc('vault_unlock', { p_passcode: 'vaultcode1' });
   const { data: loaded, error: le } = await admin.c.rpc('vault_load', { p_token: good?.token });
   ok(!le && Array.isArray(loaded?.categories), 'The right passcode opens it');
+  // A client payment is saved with all its lines, edited as one, and deleted as one.
+  const line = (kind, amount) => ({ kind, amount, label: kind });
+  const { data: pay, error: pe } = await admin.c.rpc('vault_save_payment', { p_token: good?.token, p: {
+    month: '2026-10-15', client: 'Check Co', details: { gross: 500 }, entries: [line('revenue', 500), line('direct_cost', 22.3)] } });
+  await admin.c.rpc('vault_save_payment', { p_token: good?.token, p: {
+    id: pay?.id, month: '2026-10-01', client: 'Check Co', details: { gross: 500 }, entries: [line('revenue', 500), line('direct_cost', 22.3), line('tax', 10)] } });
+  const { count: lines } = await service.from('vault_entries').select('*', { count: 'exact', head: true }).eq('payment_id', pay?.id);
+  ok(!pe && lines === 3, 'Editing a client payment replaces its lines instead of adding more', `${lines} lines`);
+  const { error: payStolen } = await zoya.c.rpc('vault_save_payment', { p_token: good?.token, p: { month: '2026-10-01', entries: [line('revenue', 1)] } });
+  ok(!!payStolen, "Nobody else can log a payment into the vault");
+  await admin.c.rpc('vault_delete', { p_token: good?.token, p_table: 'payment', p_id: pay?.id });
+  const { count: after } = await service.from('vault_entries').select('*', { count: 'exact', head: true }).eq('payment_id', pay?.id);
+  ok(after === 0, 'Deleting a client payment removes all its lines');
   const { error: stolen } = await zoya.c.rpc('vault_load', { p_token: good?.token });
   ok(!!stolen, "Another account can't use the owner's unlock token");
   for (const p of ['a1', 'a2', 'a3', 'a4', 'a5']) await admin.c.rpc('vault_unlock', { p_passcode: p });

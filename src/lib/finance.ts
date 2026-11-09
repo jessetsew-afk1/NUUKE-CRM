@@ -20,6 +20,8 @@ export type Kind =
 export interface VEntry {
   id: number; month: string; investor_id: number | null; kind: Kind; category_id: number | null; label: string | null;
   amount: number; currency: 'USD' | 'PKR'; original_amount: number | null; fx: number | null; recurring: boolean; note: string | null;
+  /** Set when the line came from a logged client payment (edit it through the payment). */
+  payment_id?: number | null;
 }
 export interface VStats { id: number; month: string; investor_id: number | null; data: Record<string, number | null> }
 export interface VCategory { id: number; kind: Kind; name: string; note: string | null; acquisition: boolean; archived: boolean }
@@ -503,3 +505,98 @@ export function fmtValue(v: number | null | undefined, f: Fmt): string {
   }
 }
 export const money = (v: number | null | undefined) => fmtValue(v ?? 0, 'usd');
+
+/* ======================================================= client payments */
+/**
+ * One client payment, from what they paid to what landed in the bank:
+ * charged → fees and tax taken off → converted (USD → GBP → PKR, USD → PKR or GBP → PKR) → bank charges → landed.
+ * Saved as one payment plus the ledger lines it implies, all in USD at the reference USD→PKR rate.
+ */
+export type PayCurrency = 'USD' | 'GBP';
+export type PayRoute = 'USD>GBP>PKR' | 'USD>PKR' | 'GBP>PKR';
+export interface PayDeduction {
+  id: string; name: string; kind: 'direct_cost' | 'tax' | 'expense'; category_id: number | null;
+  pct: number; fixed: number;
+}
+export interface PaymentDetails {
+  client: string; label: string; revenue_category_id: number | null; recurring?: boolean;
+  currency: PayCurrency; gross: number; deductions: PayDeduction[];
+  route: PayRoute; usd_gbp: number; gbp_pkr: number; usd_pkr: number;
+  bank_fee_pkr: number; received_pkr: number | null; ref_usd_pkr: number; note: string;
+}
+export interface VPayment { id: number; month: string; investor_id: number | null; client: string | null; details: PaymentDetails }
+
+export interface PaymentStep { label: string; amount: number; currency: 'USD' | 'GBP' | 'PKR'; kind: 'start' | 'minus' | 'convert' | 'end' | 'note'; sub?: string }
+export interface PaymentResult {
+  ok: boolean; error?: string; steps: PaymentStep[];
+  grossUsd: number; deductionsUsd: number; netCharge: number; convertedPkr: number; landedPkr: number;
+  landedUsd: number; fxCostUsd: number; bankUsd: number; keptPct: number | null; effectiveRate: number | null; marketPkr: number;
+  entries: { kind: Kind; category_id: number | null; label: string; amount: number; currency: 'USD' | 'PKR'; original_amount: number | null; fx: number | null }[];
+}
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+export function computePayment(d: PaymentDetails, cats: VCategory[]): PaymentResult {
+  const ref = Number(d.ref_usd_pkr) || 0;
+  const gross = Number(d.gross) || 0;
+  const empty: PaymentResult = { ok: false, steps: [], grossUsd: 0, deductionsUsd: 0, netCharge: 0, convertedPkr: 0, landedPkr: 0, landedUsd: 0, fxCostUsd: 0, bankUsd: 0, keptPct: null, effectiveRate: null, marketPkr: 0, entries: [] };
+  if (!(gross > 0)) return { ...empty, error: 'Type what the client paid' };
+  if (!(ref > 0)) return { ...empty, error: 'Set the market USD → PKR rate' };
+  const ccy = d.route === 'GBP>PKR' ? 'GBP' : 'USD';
+  // Value of an amount in the charge currency, in USD (GBP goes through PKR at the market rate).
+  const toUsd = (x: number) => (ccy === 'USD' ? x : (x * (Number(d.gbp_pkr) || 0)) / ref);
+  const steps: PaymentStep[] = [{ label: 'Client paid', amount: gross, currency: ccy, kind: 'start' }];
+  let net = gross;
+  const ded = d.deductions.map((x) => {
+    const amt = r2(gross * (Number(x.pct) || 0) / 100 + (Number(x.fixed) || 0));
+    return { ...x, amt };
+  }).filter((x) => x.amt > 0);
+  for (const x of ded) {
+    net = r2(net - x.amt);
+    const parts = [x.pct ? `${x.pct}%` : '', x.fixed ? `${ccy === 'USD' ? '$' : '£'}${x.fixed}` : ''].filter(Boolean).join(' + ');
+    steps.push({ label: x.name || 'Deduction', amount: -x.amt, currency: ccy, kind: 'minus', sub: parts });
+  }
+  if (net < 0) return { ...empty, steps, error: 'The deductions are more than the payment' };
+  steps.push({ label: 'After fees & tax', amount: net, currency: ccy, kind: 'note' });
+  let pkr = 0;
+  if (d.route === 'USD>GBP>PKR') {
+    const gbp = r2(net * (Number(d.usd_gbp) || 0));
+    steps.push({ label: 'Converted to pounds', amount: gbp, currency: 'GBP', kind: 'convert', sub: `@ ${d.usd_gbp} £ per $1` });
+    pkr = r2(gbp * (Number(d.gbp_pkr) || 0));
+    steps.push({ label: 'Converted to rupees', amount: pkr, currency: 'PKR', kind: 'convert', sub: `@ ${d.gbp_pkr} Rs per £1` });
+  } else if (d.route === 'USD>PKR') {
+    pkr = r2(net * (Number(d.usd_pkr) || 0));
+    steps.push({ label: 'Converted to rupees', amount: pkr, currency: 'PKR', kind: 'convert', sub: `@ ${d.usd_pkr} Rs per $1` });
+  } else {
+    pkr = r2(net * (Number(d.gbp_pkr) || 0));
+    steps.push({ label: 'Converted to rupees', amount: pkr, currency: 'PKR', kind: 'convert', sub: `@ ${d.gbp_pkr} Rs per £1` });
+  }
+  if (!(pkr > 0)) return { ...empty, steps, error: 'Fill in the conversion rate(s)' };
+  const bank = Math.max(0, Number(d.bank_fee_pkr) || 0);
+  if (bank) steps.push({ label: 'Bank charges', amount: -bank, currency: 'PKR', kind: 'minus' });
+  const expected = r2(pkr - bank);
+  const landed = d.received_pkr != null && Number(d.received_pkr) > 0 ? r2(Number(d.received_pkr)) : expected;
+  if (landed !== expected) steps.push({ label: 'Difference vs the rates above', amount: r2(landed - expected), currency: 'PKR', kind: 'minus', sub: 'counted as conversion cost' });
+  steps.push({ label: 'Landed in your bank', amount: landed, currency: 'PKR', kind: 'end' });
+
+  const grossUsd = r2(toUsd(gross));
+  const dedUsd = ded.map((x) => ({ ...x, usd: r2(toUsd(x.amt)) }));
+  const deductionsUsd = r2(dedUsd.reduce((a, x) => a + x.usd, 0));
+  const bankUsd = r2(bank / ref);
+  const landedUsd = r2(landed / ref);
+  // Whatever is left between the fees and what landed is what the conversion cost (or gained).
+  const fxCostUsd = r2(grossUsd - deductionsUsd - bankUsd - landedUsd);
+  const cat = (kind: Kind, name: string) => cats.find((c) => c.kind === kind && c.name === name)?.id ?? null;
+  const who = d.client ? ` · ${d.client}` : '';
+  const entries: PaymentResult['entries'] = [
+    { kind: 'revenue', category_id: d.revenue_category_id, label: (d.label || 'Client payment') + who, amount: grossUsd,
+      currency: 'USD', original_amount: null, fx: null },
+    ...dedUsd.map((x) => ({ kind: x.kind as Kind, category_id: x.category_id, label: `${x.name}${who}`, amount: x.usd, currency: 'USD' as const, original_amount: null, fx: null })),
+  ];
+  if (fxCostUsd > 0) entries.push({ kind: 'expense', category_id: cat('expense', 'Currency conversion cost'), label: `Conversion cost${who}`, amount: fxCostUsd, currency: 'USD', original_amount: null, fx: null });
+  if (fxCostUsd < 0) entries.push({ kind: 'other_income', category_id: cat('other_income', 'Currency gains'), label: `Conversion gain${who}`, amount: -fxCostUsd, currency: 'USD', original_amount: null, fx: null });
+  if (bank) entries.push({ kind: 'expense', category_id: cat('expense', 'Bank charges'), label: `Bank charges${who}`, amount: bankUsd, currency: 'PKR', original_amount: bank, fx: ref });
+  return {
+    ok: true, steps, grossUsd, deductionsUsd, netCharge: net, convertedPkr: pkr, landedPkr: landed, landedUsd, fxCostUsd, bankUsd,
+    keptPct: grossUsd ? landedUsd / grossUsd : null, effectiveRate: grossUsd ? landed / grossUsd : null, marketPkr: r2(grossUsd * ref), entries,
+  };
+}

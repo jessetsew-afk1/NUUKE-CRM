@@ -5,10 +5,12 @@ import {
   BookOpen, Calculator, FileDown, FileSpreadsheet, Gauge, KeyRound, LayoutDashboard, Lock, Notebook, Settings, ShieldCheck, Users,
 } from 'lucide-react';
 import { lockVault, setPasscode, unlockVault, useVault, useVaultStatus, useVaultToken } from '@/data/vault';
-import { Button, Empty, Input, PageHeader, Panel, Skeleton, Spinner } from '@/ui/kit';
+import { Button, Empty, Input, Panel, Skeleton, Spinner } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { time } from '@/lib/format';
-import { Ctx, PeriodBar, periodMonths, thisMonth, useKnownMonths, type Mode, type Period, type VaultCtx } from './parts';
+import { Ctx, CountUp, PeriodBar, Sparkline, periodMonths, thisMonth, useKnownMonths, useReport, useV, type Mode, type Period, type VaultCtx } from './parts';
+import { addMonths, monthRange, periodLabel, type Fmt } from '@/lib/finance';
+import { motion } from 'framer-motion';
 import { Overview } from './Overview';
 import { Statements } from './Statements';
 import { MetricsTab, Glossary } from './Metrics';
@@ -54,8 +56,14 @@ function GateCard({ title, sub, children }: { title: string; sub: string; childr
   return (
     <div className="grid min-h-[70vh] place-items-center px-4">
       <Panel strong className="w-full max-w-[420px] !p-7 text-center">
-        <div className="mx-auto grid size-16 place-items-center rounded-[22px] bg-[linear-gradient(135deg,#7C5CFF,#5AB8FF)] text-white shadow-[0_12px_40px_-12px_rgba(124,92,255,.8)]">
-          <ShieldCheck className="size-8" />
+        <div className="relative mx-auto grid size-20 place-items-center">
+          <motion.div className="absolute inset-0 rounded-full" style={{ background: 'conic-gradient(from 0deg, #7C5CFF, #5AB8FF, #30C46C, #7C5CFF)' }}
+            animate={{ rotate: 360 }} transition={{ duration: 6, repeat: Infinity, ease: 'linear' }} />
+          <div className="absolute inset-[3px] rounded-full bg-[#0D0C13]" />
+          <motion.div className="relative grid size-14 place-items-center rounded-full bg-[linear-gradient(135deg,#7C5CFF,#5AB8FF)] text-white shadow-[0_12px_40px_-8px_rgba(124,92,255,.9)]"
+            animate={{ scale: [1, 1.06, 1] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}>
+            <ShieldCheck className="size-7" />
+          </motion.div>
         </div>
         <h1 className="mt-5 text-[24px] font-extrabold">{title}</h1>
         <p className="text-2 mt-1.5 text-[14px]">{sub}</p>
@@ -157,18 +165,13 @@ function Vault() {
 
   return (
     <Ctx.Provider value={ctx}>
-      <PageHeader eyebrow={<span className="flex items-center gap-1.5"><ShieldCheck className="size-3.5" />Private · only you</span>}
-        title="Finance vault" sub={`${company}'s money, metrics and investor accounts, all worked out from what you enter.`}
-        right={<>
-          <Button variant="glass" icon={<FileDown className="size-4" />} onClick={() => setExporting(true)}>Company report PDF</Button>
-          <Button variant="glass" icon={<Lock className="size-4" />} onClick={() => { void lockVault(); toast({ title: 'Vault locked' }); }}>Lock</Button>
-        </>} />
+      <VaultHero company={company} onExport={() => setExporting(true)} onLock={() => { void lockVault(); toast({ title: 'Vault locked' }); }} />
 
       <div className="scroll-x no-scrollbar -mx-1 mb-4 flex gap-1.5 px-1">
         {TABS.map((t) => (
           <button key={t.id} type="button" onClick={() => setTab(t.id)}
             className={clsx('flex shrink-0 items-center gap-2 rounded-2xl px-3.5 py-2 text-[13.5px] font-bold transition-colors',
-              tab === t.id ? 'bg-iris text-white shadow-[0_8px_24px_-10px_rgba(124,92,255,.8)]' : 'glass text-2 hover:text-[color:var(--text)]')}>
+              tab === t.id ? 'bg-[linear-gradient(135deg,#7C5CFF,#5AB8FF)] text-white shadow-[0_10px_28px_-10px_rgba(124,92,255,.9)]' : 'glass text-2 hover:-translate-y-0.5 hover:text-[color:var(--text)]')}>
             <t.icon className="size-4" />{t.label}
           </button>
         ))}
@@ -191,5 +194,54 @@ function Vault() {
         </Suspense>
       )}
     </Ctx.Provider>
+  );
+}
+
+/** The vault's banner: dark, glowing, with the period's headline numbers counting up. */
+function VaultHero({ company, onExport, onLock }: { company: string; onExport: () => void; onLock: () => void }) {
+  const { months } = useV();
+  const r = useReport('company');
+  const end = months[months.length - 1];
+  const trendMonths = monthRange(addMonths(end, -11), end);
+  const trend = useReport('company', trendMonths);
+  const m = r.metrics;
+  const stats: { label: string; value: number | null | undefined; fmt: Fmt; tone?: string }[] = [
+    { label: 'Revenue', value: m.revenue, fmt: 'usd' },
+    { label: 'Net profit', value: m.net_profit, fmt: 'usd', tone: (m.net_profit ?? 0) >= 0 ? '#8BE9B3' : '#FF8E8E' },
+    { label: 'Net margin', value: m.net_margin, fmt: 'pct' },
+    { label: 'Kept after investors', value: m.retained_profit, fmt: 'usd' },
+  ];
+  return (
+    <div className="relative mb-5 overflow-hidden rounded-[30px] bg-[#0D0C13] p-6 text-white shadow-[0_40px_90px_-40px_rgba(124,92,255,.75)] sm:p-7">
+      <motion.div className="pointer-events-none absolute -left-20 -top-24 size-72 rounded-full bg-[#7C5CFF] opacity-50 blur-3xl"
+        animate={{ x: [0, 40, 0], y: [0, 20, 0] }} transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }} />
+      <motion.div className="pointer-events-none absolute -bottom-28 right-10 size-72 rounded-full bg-[#30C46C] opacity-30 blur-3xl"
+        animate={{ x: [0, -50, 0], y: [0, -10, 0] }} transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }} />
+      <div className="pointer-events-none absolute right-[-60px] top-[-40px] size-64 rounded-full bg-[#5AB8FF] opacity-25 blur-3xl" />
+      <div className="pointer-events-none absolute inset-0 opacity-[.07]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px)', backgroundSize: '32px 32px', maskImage: 'radial-gradient(ellipse at 30% 0%, black, transparent 70%)' }} />
+      <div className="relative flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.18em] text-[#B9B2FF]"><ShieldCheck className="size-3.5" />Private · only you</div>
+          <h1 className="mt-1.5 font-display text-[32px] font-extrabold leading-none tracking-tight sm:text-[38px]">Finance vault</h1>
+          <p className="mt-2 text-[13.5px] text-white/60">{company} · {periodLabel(months)}</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={onExport} className="flex h-10 items-center gap-2 rounded-2xl bg-white/10 px-4 text-[13.5px] font-bold backdrop-blur hover:bg-white/20"><FileDown className="size-4" />Report PDF</button>
+          <button type="button" onClick={onLock} className="flex h-10 items-center gap-2 rounded-2xl bg-white px-4 text-[13.5px] font-bold text-black hover:bg-white/90"><Lock className="size-4" />Lock</button>
+        </div>
+      </div>
+      <div className="relative mt-6 grid grid-cols-2 gap-3 lg:grid-cols-[repeat(4,minmax(0,1fr))_1.3fr]">
+        {stats.map((x) => (
+          <div key={x.label} className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 backdrop-blur-sm">
+            <div className="text-[10.5px] font-bold uppercase tracking-wider text-white/50">{x.label}</div>
+            <CountUp value={x.value} fmt={x.fmt} className="tabular mt-1 block font-display text-[22px] font-extrabold leading-tight sm:text-[24px]" />
+          </div>
+        ))}
+        <div className="col-span-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 lg:col-span-1">
+          <div className="text-[10.5px] font-bold uppercase tracking-wider text-white/50">Net profit · 12 months</div>
+          <Sparkline values={trend.byMonth.map((b) => (b.pnl.revenue || b.pnl.opex || b.pnl.costOfSales ? b.pnl.netProfit : null))} color="#8BE9B3" height={44} className="mt-1" />
+        </div>
+      </div>
+    </div>
   );
 }
