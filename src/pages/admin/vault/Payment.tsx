@@ -58,7 +58,6 @@ export function PaymentEditor({ draft, onClose }: { draft: PaymentDraft | null; 
   if (!d) return <Sheet open={false} onClose={onClose}>{null}</Sheet>;
   const set = <K extends keyof PaymentDetails>(k: K, v: PaymentDetails[K]) => setD((x) => (x ? { ...x, [k]: v } : x));
   const setDed = (id: string, patch: Partial<PayDeduction>) => set('deductions', d.deductions.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-  const num = (v: string) => { const n = Number(v.replace(/[, ]/g, '')); return Number.isFinite(n) ? n : 0; };
   const sym = d.route === 'GBP>PKR' ? '£' : '$';
 
   const submit = async () => {
@@ -109,7 +108,7 @@ export function PaymentEditor({ draft, onClose }: { draft: PaymentDraft | null; 
               ))}
             </div>
             <div className="mt-3">
-              <Input label={`Client paid (${sym})`} inputMode="decimal" placeholder="500" value={d.gross || ''} onChange={(e) => set('gross', num(e.target.value))}
+              <NumInput label={`Client paid (${sym})`} placeholder="500" value={d.gross} onValue={(v) => set('gross', v ?? 0)}
                 leading={<span className="text-[13px] font-bold">{sym}</span>} />
             </div>
           </Section>
@@ -136,13 +135,13 @@ export function PaymentEditor({ draft, onClose }: { draft: PaymentDraft | null; 
 
           <Section n={4} title="Conversion rates" sub="Type the rates you actually got">
             <div className="grid gap-3 sm:grid-cols-2">
-              {d.route === 'USD>GBP>PKR' && <Input label="£ per $1" inputMode="decimal" placeholder="0.76" value={d.usd_gbp || ''} onChange={(e) => set('usd_gbp', num(e.target.value))} />}
-              {d.route !== 'USD>PKR' && <Input label="Rs per £1" inputMode="decimal" placeholder="360" value={d.gbp_pkr || ''} onChange={(e) => set('gbp_pkr', num(e.target.value))} />}
-              {d.route === 'USD>PKR' && <Input label="Rs per $1" inputMode="decimal" placeholder="278" value={d.usd_pkr || ''} onChange={(e) => set('usd_pkr', num(e.target.value))} />}
-              <Input label="Bank charges (Rs)" inputMode="decimal" placeholder="0" value={d.bank_fee_pkr || ''} onChange={(e) => set('bank_fee_pkr', num(e.target.value))} />
-              <Input label="Actually landed (Rs, optional)" inputMode="decimal" placeholder="from your bank statement" value={d.received_pkr ?? ''}
-                onChange={(e) => set('received_pkr', e.target.value.trim() ? num(e.target.value) : null)} hint="If it differs, the gap counts as conversion cost." />
-              <Input label="Market rate (Rs per $1)" inputMode="decimal" value={d.ref_usd_pkr || ''} onChange={(e) => set('ref_usd_pkr', num(e.target.value))}
+              {d.route === 'USD>GBP>PKR' && <NumInput label="£ per $1" placeholder="0.76" value={d.usd_gbp} onValue={(v) => set('usd_gbp', v ?? 0)} />}
+              {d.route !== 'USD>PKR' && <NumInput label="Rs per £1" placeholder="360" value={d.gbp_pkr} onValue={(v) => set('gbp_pkr', v ?? 0)} />}
+              {d.route === 'USD>PKR' && <NumInput label="Rs per $1" placeholder="278" value={d.usd_pkr} onValue={(v) => set('usd_pkr', v ?? 0)} />}
+              <NumInput label="Bank charges (Rs)" placeholder="0" value={d.bank_fee_pkr} onValue={(v) => set('bank_fee_pkr', v ?? 0)} />
+              <NumInput label="Actually landed (Rs, optional)" placeholder="from your bank statement" value={d.received_pkr}
+                onValue={(v) => set('received_pkr', v)} hint="If it differs, the gap counts as conversion cost." />
+              <NumInput label="Market rate (Rs per $1)" value={d.ref_usd_pkr} onValue={(v) => set('ref_usd_pkr', v ?? 0)}
                 hint="What $1 is really worth today: used to measure what the conversion cost you." />
             </div>
           </Section>
@@ -170,13 +169,21 @@ function Section({ n, title, sub, children }: { n: number; title: string; sub?: 
   );
 }
 
+/** A number box that keeps exactly what is typed ("0.", "0.7", "1,250"), so decimals like 0.76 can be entered. */
+function NumInput({ value, onValue, ...rest }: Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'> & { value: number | null | undefined; onValue: (v: number | null) => void }) {
+  const parse = (t: string) => { const c = t.replace(/[, ]/g, ''); if (!c) return null; const n = Number(c); return Number.isFinite(n) ? n : null; };
+  const [t, setT] = useState(value ? String(value) : '');
+  useEffect(() => { if ((parse(t) ?? 0) !== (value ?? 0)) setT(value ? String(value) : ''); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <Input {...rest} inputMode="decimal" value={t} onChange={(e) => { const v = e.target.value.replace(/[^0-9.,\s-]/g, ''); setT(v); onValue(parse(v)); }} />;
+}
+
 function MiniNum({ value, onChange, prefix, suffix }: { value: number; onChange: (v: number) => void; prefix?: string; suffix?: string }) {
   const [t, setT] = useState(value ? String(value) : '');
   useEffect(() => { if (Number(t || 0) !== value) setT(value ? String(value) : ''); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <label className="flex h-9 items-center gap-1 rounded-xl bg-[var(--glass-strong)] px-2.5 text-[13.5px] focus-within:ring-2 focus-within:ring-iris">
       {prefix && <span className="text-3 font-bold">{prefix}</span>}
-      <input inputMode="decimal" value={t} placeholder="0" onChange={(e) => { setT(e.target.value); const n = Number(e.target.value); onChange(Number.isFinite(n) ? n : 0); }}
+      <input inputMode="decimal" value={t} placeholder="0" onChange={(e) => { setT(e.target.value); const n = Number(e.target.value.replace(/[, ]/g, '')); onChange(Number.isFinite(n) ? n : 0); }}
         className="tabular w-full min-w-0 bg-transparent text-right outline-none" />
       {suffix && <span className="text-3 font-bold">{suffix}</span>}
     </label>
