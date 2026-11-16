@@ -30,7 +30,17 @@ export function useTextKit(enabled = true) {
     queryKey: ['text-kit', uid],
     enabled: enabled && !!uid,
     staleTime: 30_000,
-    queryFn: async () => must(await supabase.from('text_kit').select('*').order('kit').order('position')) as KitText[],
+    // The server hands back at most 1000 rows per request, so page through them all.
+    queryFn: async () => {
+      const PAGE = 1000;
+      const all: KitText[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const rows = must(await supabase.from('text_kit').select('*').order('kit').order('position').order('id')
+          .range(from, from + PAGE - 1)) as KitText[];
+        all.push(...rows);
+        if (rows.length < PAGE) return all;
+      }
+    },
   });
 }
 
