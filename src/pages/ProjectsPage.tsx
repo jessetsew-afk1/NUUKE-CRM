@@ -15,6 +15,7 @@ type Filter = 'active' | 'done' | 'archived' | 'all';
 export default function ProjectsPage() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
+  const canManage = isAdmin || !!profile?.is_project_manager;
   const projects = useProjects();
   const tasks = useTaskIndex();
   const pending = usePendingReviews();
@@ -39,8 +40,8 @@ export default function ProjectsPage() {
     <>
       <PageHeader
         title="Projects"
-        sub={isAdmin ? 'Set up projects, put the team and the client on them, and watch everything move.' : 'Every project you are on.'}
-        right={isAdmin && <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>New project</Button>}
+        sub={canManage ? 'Set up projects, put the team and the client on them, and watch everything move.' : 'Every project you are on.'}
+        right={canManage && <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>New project</Button>}
       />
 
       {isAdmin && (inbox.data?.length ?? 0) > 0 && (
@@ -85,8 +86,8 @@ export default function ProjectsPage() {
         <Panel>
           <Empty art={<FolderKanban className="size-10 text-iris" />}
             title={(projects.data?.length ?? 0) === 0 ? 'No projects yet' : 'Nothing matches'}
-            body={(projects.data?.length ?? 0) === 0 ? (isAdmin ? 'Create the first project, then add your production team and the client\'s login to it.' : 'When your admin puts you on a project, it will show up here.') : undefined}
-            action={isAdmin && !projects.data?.length ? <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>New project</Button> : undefined} />
+            body={(projects.data?.length ?? 0) === 0 ? (canManage ? 'Create the first project, then add your production team and the client\'s login to it.' : 'When your admin puts you on a project, it will show up here.') : undefined}
+            action={canManage && !projects.data?.length ? <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>New project</Button> : undefined} />
         </Panel>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -100,7 +101,7 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {isAdmin && <ProjectSheet project={creating ? 'new' : null} onClose={() => setCreating(false)} onSaved={(id) => navigate(`/projects/${id}`)} />}
+      {canManage && <ProjectSheet project={creating ? 'new' : null} onClose={() => setCreating(false)} onSaved={(id) => navigate(`/projects/${id}`)} />}
     </>
   );
 }

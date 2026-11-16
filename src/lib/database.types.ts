@@ -1662,6 +1662,7 @@ export type Database = {
           full_name: string
           id: string
           is_active: boolean
+          is_project_manager: boolean
           is_sales_lead: boolean
           also_story_house: boolean
           is_technical_manager: boolean
@@ -1678,6 +1679,7 @@ export type Database = {
           full_name: string
           id: string
           is_active?: boolean
+          is_project_manager?: boolean
           is_sales_lead?: boolean
           also_story_house?: boolean
           is_technical_manager?: boolean
@@ -1694,6 +1696,7 @@ export type Database = {
           full_name?: string
           id?: string
           is_active?: boolean
+          is_project_manager?: boolean
           is_sales_lead?: boolean
           also_story_house?: boolean
           is_technical_manager?: boolean

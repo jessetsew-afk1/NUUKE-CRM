@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { Archive, Check, Crown, Dice5, Plus, UserPlus } from 'lucide-react';
+import { useAuth } from '@/app/auth';
 import { usePeople } from '@/data/common';
 import { PROJECT_COLORS, PROJECT_STATUSES, type ProjectWithTeam } from '@/data/projects';
 import { adminUsers, must, supabase } from '@/lib/supabase';
@@ -28,6 +29,8 @@ interface Form {
 /** The admin's project editor: details, the team (and its lead), and the client logins. */
 export function ProjectSheet({ project, onClose, onSaved }: { project: ProjectWithTeam | 'new' | null; onClose: () => void; onSaved?: (id: number) => void }) {
   const isNew = project === 'new';
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin'; // only admins make client logins
   const p = project && project !== 'new' ? project : null;
   const people = usePeople();
   const qc = useQueryClient();
@@ -198,7 +201,7 @@ export function ProjectSheet({ project, onClose, onSaved }: { project: ProjectWi
                 </button>
               );
             })}
-            {!newClient && (
+            {isAdmin && !newClient && (
               <button type="button" onClick={() => setNewClient({ full_name: '', email: '', password: genPassword() })}
                 className="flex items-center justify-center gap-2 rounded-[18px] border-2 border-dashed border-[var(--hairline)] p-3 text-[14px] font-bold hover:bg-[var(--fill)]">
                 <UserPlus className="size-4" /> New client login
