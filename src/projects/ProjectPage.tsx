@@ -47,6 +47,7 @@ export default function ProjectPage() {
 
   const isClient = profile?.role === 'client';
   const isAdmin = profile?.role === 'admin';
+  const canManage = isAdmin || !!profile?.is_project_manager;
   const project = projects.data?.find((p) => p.id === projectId);
   const mine = (projects.data ?? []).filter((p) => !p.archived_at || p.id === projectId);
 
@@ -94,7 +95,7 @@ export default function ProjectPage() {
             options={mine.map((p) => ({ value: String(p.id), label: p.name, hint: p.client_name ?? undefined, dot: p.color }))}
           />
         )}
-        {isAdmin && <Button variant="glass" icon={<Pencil className="size-4" />} onClick={() => setEditing(true)}>Edit project</Button>}
+        {canManage && <Button variant="glass" icon={<Pencil className="size-4" />} onClick={() => setEditing(true)}>Edit project</Button>}
       </div>
 
       <nav className="no-scrollbar -mx-4 mb-5 flex gap-1 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
@@ -125,11 +126,11 @@ export default function ProjectPage() {
         {active === 'calendar' && <ProjectCalendar project={project} canEdit={canEdit} />}
         {active === 'files' && <Files project={project} canEdit={canEdit} isClient={isClient} />}
         {active === 'content' && <Content project={project} canEdit={canEdit} />}
-        {active === 'team' && <Team project={project} isClient={isClient} onManage={isAdmin ? () => setEditing(true) : undefined} />}
+        {active === 'team' && <Team project={project} isClient={isClient} onManage={canManage ? () => setEditing(true) : undefined} />}
         {active === 'messages' && <Messages project={project} isClient={isClient} />}
       </motion.div>
 
-      {isAdmin && <ProjectSheet project={editing ? project : null} onClose={() => setEditing(false)} />}
+      {canManage && <ProjectSheet project={editing ? project : null} onClose={() => setEditing(false)} />}
     </>
   );
 }
