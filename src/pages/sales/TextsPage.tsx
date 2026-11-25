@@ -22,9 +22,10 @@ import { useToast } from '@/ui/toast';
 import { useZoomLink } from '@/lib/zoomLaunch';
 import { Playbook, ReplyAssistant } from './ReplyAssistant';
 
-type View = KitStatus | 'all' | 'due';
+type View = KitStatus | 'all' | 'due' | 'next';
 
 const FILTERS: { key: View; label: string }[] = [
+  { key: 'next', label: 'Up next' },
   { key: 'due', label: 'Follow-ups due' },
   { key: 'to_text', label: 'To text' },
   { key: 'texted', label: 'Texted' },
@@ -32,6 +33,16 @@ const FILTERS: { key: View; label: string }[] = [
   { key: 'opted_out', label: 'Opted out' },
   { key: 'all', label: 'All' },
 ];
+
+/** Up next takes this many follow-ups, then this many new texts, and repeats. */
+const BATCH = 5;
+
+/** Follow-ups and new texts in turns: BATCH of one, then BATCH of the other. When one runs out, the rest of the other follows. */
+function takeTurns<T>(followUps: T[], fresh: T[]) {
+  const out: T[] = [];
+  for (let i = 0; i < Math.max(followUps.length, fresh.length); i += BATCH) out.push(...followUps.slice(i, i + BATCH), ...fresh.slice(i, i + BATCH));
+  return out;
+}
 
 const VERSION_NOTE = { A: 'Free offer up front', B: 'An idea for their project, then the offer' } as const;
 
@@ -79,7 +90,7 @@ export default function TextsPage() {
   const rows = useTextKit();
   const people = usePeople();
   const now = useMinute();
-  const [filter, setFilter] = useState<View>('to_text');
+  const [filter, setFilter] = useState<View>('next');
   const [zone, setZone] = useState<ZoneKey>('all');
   const [q, setQ] = useState('');
   const [who, setWho] = useState<string>('all');
@@ -88,21 +99,17 @@ export default function TextsPage() {
   const isAdmin = profile?.role === 'admin';
   // Admins see every kit; they can narrow it to one person's list.
   const all = who === 'all' ? everyone : everyone.filter((r) => r.owner_id === who);
-  const inView = (r: KitText, v: View) => v === 'all' || (v === 'due' ? !!nextTouch(r, now)?.due : r.status === v);
+  const isDue = (r: KitText) => !!nextTouch(r, now)?.due;
+  const inView = (r: KitText, v: View) => v === 'all' || (v === 'due' ? isDue(r) : v === 'next' ? isDue(r) || r.status === 'to_text' : r.status === v);
   // The card someone is replying on stays put, even once it moves to Replied.
   const [replyingOn, setReplyingOn] = useState<number | null>(null);
   const inStatus = all.filter((r) => inView(r, filter) || r.id === replyingOn);
-  // Follow-ups are time-sensitive, so open on them when any are due.
-  const opened = useRef(false);
-  useEffect(() => {
-    if (opened.current || !rows.data) return;
-    opened.current = true;
-    if (rows.data.some((r) => nextTouch(r)?.due)) setFilter('due');
-  }, [rows.data]);
   const inZone = (r: KitText, z: ZoneKey) => z === 'all' || (z === 'open' ? localTime(r.time_zone, now).ok : r.time_zone === z);
   const zones = [...new Set(all.map((r) => r.time_zone))].sort((a, b) => utcOffset(b, now) - utcOffset(a, now));
   // A search looks through every list, so a name is found whether or not they've been texted yet.
-  const shown = term ? all.filter((r) => matches(r, term)) : inStatus.filter((r) => inZone(r, zone) || r.id === replyingOn);
+  const listed = term ? all.filter((r) => matches(r, term)) : inStatus.filter((r) => inZone(r, zone) || r.id === replyingOn);
+  // Up next mixes the two so follow-ups (people who already know the name) never pile up behind new texts.
+  const shown = !term && filter === 'next' ? takeTurns(listed.filter((r) => r.status !== 'to_text'), listed.filter((r) => r.status === 'to_text')) : listed;
   const owners = [...new Set(everyone.map((r) => r.owner_id))];
   const ownerName = (id: string) => (id === profile?.id ? profile.full_name : people.data?.find((p) => p.id === id)?.full_name) ?? 'someone';
   const forOthers = owners.some((id) => id !== profile?.id);
@@ -126,7 +133,8 @@ export default function TextsPage() {
             <li>Only between {hourLabel(TEXT_FROM)} and {hourLabel(TEXT_UNTIL)} their time. The button waits outside those hours.</li>
             <li>Got a reply? Tap <b className="text-[color:var(--text)]">They replied</b>, paste their message, and you get a suggested answer to send back.</li>
             <li>Zoom adds the opt-out line. If they reply STOP or "no", tick <b className="text-[color:var(--text)]">Opted out</b> and never text them again.</li>
-            <li>No answer? A <b className="text-[color:var(--text)]">2nd text</b> shows up under Follow-ups due {FOLLOWUP_GAP_DAYS} days later, then a 3rd. Anyone who replied or opted out gets no more.</li>
+            <li>No answer? A <b className="text-[color:var(--text)]">2nd text</b> comes due {FOLLOWUP_GAP_DAYS} days later, then a 3rd. Anyone who replied or opted out gets no more.</li>
+            <li>Work from <b className="text-[color:var(--text)]">Up next</b>: {BATCH} follow-ups, then {BATCH} new texts, then {BATCH} follow-ups, and so on, top to bottom.</li>
           </ul>
         </div>
       </Panel>
@@ -205,10 +213,10 @@ export default function TextsPage() {
         </div>
       ) : (
         <Empty
-          title={term ? 'Nobody by that name' : zone !== 'all' && inStatus.length ? (zone === 'open' ? 'Nobody is in texting hours right now' : `Nobody here in ${zoneName(zone)}`) : filter === 'to_text' ? 'Everyone has been texted' : filter === 'due' ? 'No follow-ups due' : 'Nobody here'}
+          title={term ? 'Nobody by that name' : zone !== 'all' && inStatus.length ? (zone === 'open' ? 'Nobody is in texting hours right now' : `Nobody here in ${zoneName(zone)}`) : filter === 'to_text' ? 'Everyone has been texted' : filter === 'due' ? 'No follow-ups due' : filter === 'next' ? 'All caught up' : 'Nobody here'}
           body={term ? 'Try part of their first or last name, or their number.'
             : zone !== 'all' && inStatus.length ? `Texting opens at ${hourLabel(TEXT_FROM)} in each lead's own time zone. Try another zone.`
-            : filter === 'to_text' ? 'Check Texted for anyone who replies.'
+            : filter === 'to_text' || filter === 'next' ? 'Check Texted for anyone who replies.'
             : filter === 'due' ? `A 2nd text comes due ${FOLLOWUP_GAP_DAYS} days after the 1st, and a 3rd ${FOLLOWUP_GAP_DAYS} days after that, for anyone who hasn't answered.` : undefined} />
       )}
     </div>
