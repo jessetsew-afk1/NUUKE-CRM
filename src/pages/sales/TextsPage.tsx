@@ -7,12 +7,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import Papa from 'papaparse';
-import { Ban, Check, Clock, Copy, Download, Gift, History, MessageSquareText, Repeat, Reply, RotateCcw, Search, Send, Upload, X } from 'lucide-react';
+import { Ban, CalendarCheck, Check, Clock, Copy, Download, Gift, History, MessageSquareText, PhoneOff, Repeat, Reply, RotateCcw, Search, Send, ThumbsUp, Upload, X } from 'lucide-react';
 import { useAuth } from '@/app/auth';
 import { usePeople } from '@/data/common';
 import { readWorkbook, tableOf, text } from '@/admin/workbook';
 import {
-  FOLLOWUP_COLUMNS, FOLLOWUP_GAP_DAYS, KIT_STATUS, TEXT_FROM, TEXT_UNTIL, assignTexts, followupSheet, loadFollowups, localTime, nextTouch, prettyPhone,
+  FOLLOWUP_COLUMNS, FOLLOWUP_GAP_DAYS, KIT_STATUS, REPLIED, TEXT_FROM, TEXT_UNTIL, assignTexts, followupSheet, loadFollowups, localTime, nextTouch, prettyPhone,
   signedMessage, tidyAsk, touchesSent, useMarkText, useTextKit, versionStats, zoomSmsHref,
   type FollowupRow, type KitStatus, type KitText,
 } from '@/data/textKit';
@@ -30,7 +30,10 @@ const FILTERS: { key: View; label: string }[] = [
   { key: 'to_text', label: 'To text' },
   { key: 'texted', label: 'Texted' },
   { key: 'replied', label: 'Replied' },
+  { key: 'interested', label: 'Interested' },
+  { key: 'meeting_booked', label: 'Meeting booked' },
   { key: 'opted_out', label: 'Opted out' },
+  { key: 'blocked', label: "Can't text" },
   { key: 'all', label: 'All' },
 ];
 
@@ -133,6 +136,8 @@ export default function TextsPage() {
             <li>Only between {hourLabel(TEXT_FROM)} and {hourLabel(TEXT_UNTIL)} their time. The button waits outside those hours.</li>
             <li>Got a reply? Tap <b className="text-[color:var(--text)]">They replied</b>, paste their message, and you get a suggested answer to send back.</li>
             <li>Zoom adds the opt-out line. If they reply STOP or "no", tick <b className="text-[color:var(--text)]">Opted out</b> and never text them again.</li>
+            <li>Zoom won't send to the number? Tick <b className="text-[color:var(--text)]">Can't text</b>. It's kept apart from opt-outs.</li>
+            <li>Keen on a call? Tick <b className="text-[color:var(--text)]">Interested</b>, then <b className="text-[color:var(--text)]">Meeting booked</b> once it's in the calendar.</li>
             <li>No answer? A <b className="text-[color:var(--text)]">2nd text</b> comes due {FOLLOWUP_GAP_DAYS} days later, then a 3rd. Anyone who replied or opted out gets no more.</li>
             <li>Work from <b className="text-[color:var(--text)]">Up next</b>: {BATCH} follow-ups, then {BATCH} new texts, then {BATCH} follow-ups, and so on, top to bottom.</li>
           </ul>
@@ -363,6 +368,7 @@ function TextCard({ r, now, sender, owner, onReplying }: {
   const setReplying = (open: boolean) => { setReplyingState(open); onReplying(open); };
   const t = localTime(r.time_zone, now);
   const status = r.status as KitStatus;
+  const answered = REPLIED.includes(status);
   const ask = tidyAsk(r.asked_for);
   const first = signedMessage(r.message, sender);
   // Someone who hasn't answered gets a 2nd text, then a 3rd, a few days apart.
@@ -393,7 +399,7 @@ function TextCard({ r, now, sender, owner, onReplying }: {
   };
 
   return (
-    <Panel className={clsx('min-w-0 !p-4 sm:!p-5', status === 'opted_out' && 'opacity-70')}>
+    <Panel className={clsx('min-w-0 !p-4 sm:!p-5', (status === 'opted_out' || status === 'blocked') && 'opacity-70')}>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -477,13 +483,23 @@ function TextCard({ r, now, sender, owner, onReplying }: {
             {opened ? `Sent it? Tick ${ORDINAL[next!.touch]} text` : `${ORDINAL[next!.touch]} text sent`}
           </Button>
         )}
-        {(status === 'texted' || status === 'replied') && !replying && (
-          <Button variant={status === 'replied' ? 'iris' : 'ghost'} icon={<Reply className="size-4" />} onClick={() => setReplying(true)}>
-            {status === 'replied' ? 'Reply' : 'They replied'}
+        {(status === 'texted' || answered) && !replying && (
+          <Button variant={answered ? 'iris' : 'ghost'} icon={<Reply className="size-4" />} onClick={() => setReplying(true)}>
+            {answered ? 'Reply' : 'They replied'}
           </Button>
         )}
-        {status !== 'opted_out' && status !== 'to_text' && (
+        {(status === 'texted' || status === 'replied') && (
+          <Button variant="ghost" loading={busy === 'interested'} icon={<ThumbsUp className="size-4" />} onClick={() => set('interested', 'Marked interested')}>Interested</Button>
+        )}
+        {(status === 'replied' || status === 'interested') && (
+          <Button variant="ghost" loading={busy === 'meeting_booked'} icon={<CalendarCheck className="size-4" />} onClick={() => set('meeting_booked', 'Meeting booked')}>Meeting booked</Button>
+        )}
+        {status !== 'opted_out' && status !== 'to_text' && status !== 'meeting_booked' && (
           <Button variant="ghost" loading={busy === 'opted_out'} icon={<Ban className="size-4" />} onClick={() => set('opted_out', 'Opted out. Never text them again.')}>Opted out</Button>
+        )}
+        {(status === 'to_text' || status === 'texted' || status === 'opted_out') && (
+          <Button variant="ghost" loading={busy === 'blocked'} icon={<PhoneOff className="size-4" />} title="Zoom wouldn't send: the number is blocked or can't get texts"
+            onClick={() => set('blocked', "Marked can't text. It won't count as an opt-out.")}>Can't text</Button>
         )}
         {status !== 'to_text' && (
           <Button variant="ghost" loading={busy === 'reset'} icon={<RotateCcw className="size-4" />} onClick={() => set('reset', undoLast ? `${undoLast} text undone` : 'Back on To text')}>

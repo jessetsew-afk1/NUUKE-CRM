@@ -52,6 +52,7 @@ export function ReplyAssistant({ r, sender, onClose }: { r: KitText; sender: str
       if (withMessage) setTheirs('');
       setHint('');
       if (s.opted_out) toast({ title: 'They asked to stop', body: 'Opted out. Don\'t reply and never text them again.', tone: 'info' });
+      else if (s.intent === 'interested') toast({ title: 'Sounds interested', body: 'Marked Interested. Tick Meeting booked once the call is set.', tone: 'success' });
       await refresh();
     } catch (e) {
       toast({ title: 'No suggestion', body: (e as Error).message, tone: 'danger' });
