@@ -10,13 +10,16 @@ import type { Database, Json } from '@/lib/database.types';
 import type { Tone } from '@/ui/kit';
 
 export type KitText = Database['public']['Tables']['text_kit']['Row'];
-export type KitStatus = 'to_text' | 'texted' | 'replied' | 'opted_out';
+export type KitStatus = 'to_text' | 'texted' | 'replied' | 'interested' | 'meeting_booked' | 'opted_out' | 'blocked';
 
 export const KIT_STATUS: Record<KitStatus, { label: string; tone: Tone }> = {
   to_text: { label: 'To text', tone: 'neutral' },
   texted: { label: 'Texted', tone: 'info' },
   replied: { label: 'Replied', tone: 'great' },
+  interested: { label: 'Interested', tone: 'great' },
+  meeting_booked: { label: 'Meeting booked', tone: 'great' },
   opted_out: { label: 'Opted out', tone: 'bad' },
+  blocked: { label: "Can't text (blocked)", tone: 'warn' },
 };
 
 /** Only text between 9am and 8pm in their time zone. */
@@ -142,12 +145,16 @@ export function prettyPhone(e164: string) {
 export const tidyAsk = (s: string | null) =>
   (s ?? '').replace(/^Details\s*/, '').replace(/\?(?=\S)/g, '? ').replace(/([a-z])(?=(What|How|Do you|Which)\b)/g, '$1 · ').trim();
 
+/** Everyone who answered, including those who went on to Interested or Meeting booked. */
+export const REPLIED: KitStatus[] = ['replied', 'interested', 'meeting_booked'];
+
 /** Replies and opt-outs per version, to see which message works better. */
 export function versionStats(rows: KitText[]) {
   return (['A', 'B'] as const).map((v) => {
     const mine = rows.filter((r) => r.version === v);
-    const sent = mine.filter((r) => r.status !== 'to_text').length;
-    const replied = mine.filter((r) => r.status === 'replied').length;
+    // Blocked numbers never got the text, so they don't count as sent.
+    const sent = mine.filter((r) => r.status !== 'to_text' && r.status !== 'blocked').length;
+    const replied = mine.filter((r) => REPLIED.includes(r.status as KitStatus)).length;
     const optedOut = mine.filter((r) => r.status === 'opted_out').length;
     return { version: v, total: mine.length, sent, replied, optedOut, rate: sent ? replied / sent : null };
   });

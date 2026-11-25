@@ -122,7 +122,10 @@ function RepCard({ r, oneDay, open, onToggle }: { r: TeamActivity; oneDay: boole
           <Figure label="Texts sent" value={count(r.texts_sent)}
             sub={r.texts_total ? `${r.followups_sent ? `+${count(r.followups_sent)} follow-ups · ` : ''}${count(r.texts_left)} left` : 'No text kit'}
             tone={r.texts_sent || r.followups_sent ? undefined : 'muted'} />
-          <Figure label="Replies" value={count(r.texts_replied)} sub={r.texts_opted_out ? `${r.texts_opted_out} opted out` : undefined} tone={r.texts_replied ? undefined : 'muted'} />
+          <Figure label="Replies" value={count(r.texts_replied)}
+            sub={[r.texts_interested && `${r.texts_interested} interested`, r.texts_booked && `${r.texts_booked} booked`,
+              r.texts_opted_out && `${r.texts_opted_out} opted out`, r.texts_blocked && `${r.texts_blocked} can't text`].filter(Boolean).join(' · ') || undefined}
+            tone={r.texts_replied ? undefined : 'muted'} />
         </div>
         <ChevronDown className={clsx('text-3 ml-auto size-5 shrink-0 transition-transform sm:ml-0', open && 'rotate-180')} />
       </button>

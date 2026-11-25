@@ -178,6 +178,9 @@ export default async (req: Request) => {
   if (suggestion.intent === 'stop') {
     const { error } = await db.rpc('text_kit_mark', { p_id: kitId, p_status: 'opted_out' });
     if (!error) optedOut = true;
+  } else if (suggestion.intent === 'interested') {
+    // Moves Replied up to Interested; never steps a booked meeting back down.
+    await db.rpc('text_kit_mark', { p_id: kitId, p_status: 'interested' });
   }
   if (suggestion.reply) {
     await db.rpc('text_thread_add', {

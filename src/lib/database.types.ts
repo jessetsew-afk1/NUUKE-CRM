@@ -2422,6 +2422,9 @@ export type Database = {
           message: string
           name: string
           opted_out_at: string | null
+          blocked_at: string | null
+          booked_at: string | null
+          interested_at: string | null
           owner_id: string
           past_notes: string | null
           phone: string
@@ -2448,6 +2451,9 @@ export type Database = {
           message: string
           name: string
           opted_out_at?: string | null
+          blocked_at?: string | null
+          booked_at?: string | null
+          interested_at?: string | null
           owner_id: string
           past_notes?: string | null
           phone: string
@@ -2474,6 +2480,9 @@ export type Database = {
           message?: string
           name?: string
           opted_out_at?: string | null
+          blocked_at?: string | null
+          booked_at?: string | null
+          interested_at?: string | null
           owner_id?: string
           past_notes?: string | null
           phone?: string
@@ -3702,6 +3711,9 @@ export type Database = {
           texts_opted_out: number
           texts_replied: number
           texts_sent: number
+          texts_blocked: number
+          texts_booked: number
+          texts_interested: number
           texts_total: number
         }[]
       }
