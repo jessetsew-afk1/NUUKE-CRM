@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { ArrowLeft, Banknote, FileDown, HandCoins, Pencil, Plus, Trash2, Users, Wallet } from 'lucide-react';
 import { usePeople } from '@/data/common';
@@ -11,10 +11,10 @@ import { useToast } from '@/ui/toast';
 import { CrmPull, EntryEditor, EntryTable } from './Ledger';
 import { Numbers } from './Numbers';
 import { PaymentEditor, type PaymentDraft } from './Payment';
+import { ExportSheet } from './ExportSheet';
 import { ProfitAndLoss } from './Statements';
 import { Def, monthOptions, show, thisMonth, useV } from './parts';
 
-const Exporter = lazy(() => import('./pdf'));
 const COLORS = ['#7C5CFF', '#30C46C', '#FF9F43', '#54A0FF', '#F368E0', '#00D2D3', '#EE5253', '#FECA57'];
 
 export function Investors() {
@@ -84,6 +84,8 @@ function InvestorDetail({ inv, onBack }: { inv: VInvestor; onBack: () => void })
   const [paying, setPaying] = useState<PaymentDraft | null>(null);
   const [reportMonth, setReportMonth] = useState(months[months.length - 1]);
   const [exporting, setExporting] = useState(false);
+  const [breakdown, setBreakdown] = useState(false);
+  const toast = useToast();
   const [section, setSection] = useState<'month' | 'statement' | 'entries' | 'numbers' | 'team' | 'terms'>('month');
   useEffect(() => { setReportMonth(months[months.length - 1]); }, [months]);
   const end = months[months.length - 1] > thisMonth() ? months[months.length - 1] : thisMonth();
@@ -92,7 +94,6 @@ function InvestorDetail({ inv, onBack }: { inv: VInvestor; onBack: () => void })
   const s = investorSummary(inv, upTo);
   const row = L.find((r) => r.month === reportMonth);
   const entries = data.entries.filter((e) => e.investor_id === inv.id).sort((a, b) => b.month.localeCompare(a.month));
-  const ctxForPdf = useV();
 
   return (
     <div className="space-y-4">
@@ -116,13 +117,20 @@ function InvestorDetail({ inv, onBack }: { inv: VInvestor; onBack: () => void })
           <span className="text-2 pl-1 text-[13px] font-semibold">Month</span>
           <Picker className="w-[190px]" value={reportMonth} onChange={setReportMonth} options={monthOptions(knownMonths)} />
           <div className="ml-auto" />
-          <Button variant="iris" icon={<FileDown className="size-4" />} onClick={() => setExporting(true)}>Monthly report PDF</Button>
+          <Button variant="glass" icon={<FileDown className="size-4" />} onClick={() => setBreakdown(true)}>Team breakdown PDF</Button>
+          <Button variant="iris" loading={exporting} icon={<FileDown className="size-4" />} onClick={async () => {
+            setExporting(true);
+            try {
+              const { downloadPdf } = await import('./pdf');
+              toast({ title: 'PDF downloaded', body: await downloadPdf(data, { type: 'investor', id: inv.id, month: reportMonth }), tone: 'success' });
+            } catch (e) { toast({ title: 'Could not make the PDF', body: (e as Error).message, tone: 'danger' }); } finally { setExporting(false); }
+          }}>Monthly statement PDF</Button>
         </div>
       </Panel>
 
       {/* Account to date */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Tile label="Total invested" value={show(s.invested)} def="All capital this investor has put in (less any returned)." sub={s.returnedCapital ? `${show(s.returnedCapital)} returned` : undefined} />
+        <Tile label="Total invested" value={show(s.invested)} def="All capital this investor has put in. Anything handed back shows underneath." sub={s.returnedCapital ? `${show(s.returnedCapital)} returned · ${show(s.invested - s.returnedCapital)} still in` : undefined} />
         <Tile label="Earned to date" value={show(s.earned)} def="Their profit share across every month so far." />
         <Tile label="Paid out" value={show(s.paid)} def="Profit share actually paid to them." />
         <Tile label="Owed now" value={show(s.owed)} def="Earned minus paid: what the company owes them today." accent />
@@ -192,11 +200,7 @@ function InvestorDetail({ inv, onBack }: { inv: VInvestor; onBack: () => void })
       <InvestorEditor value={editing} onClose={() => setEditing(null)} onDeleted={onBack} />
       <EntryEditor value={entry} onClose={() => setEntry(null)} lockInvestor />
       <PaymentEditor draft={paying} onClose={() => setPaying(null)} />
-      {exporting && (
-        <Suspense fallback={null}>
-          <Exporter kind="investor" ctx={ctxForPdf} investorId={inv.id} month={reportMonth} onDone={() => setExporting(false)} />
-        </Suspense>
-      )}
+      <ExportSheet open={breakdown} onClose={() => setBreakdown(false)} preset={{ team: String(inv.id) }} />
     </div>
   );
 }
@@ -331,8 +335,10 @@ function InvestorEditor({ value, onClose, onCreated, onDeleted }: {
   const toast = useToast();
   const [f, setF] = useState<Record<string, string | boolean>>({});
   const [busy, setBusy] = useState(false);
+  const created = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (!value) return;
+    created.current = undefined;
     setF({
       name: value.name ?? '', company: value.company ?? '', email: value.email ?? '', phone: value.phone ?? '',
       joined_on: value.joined_on ?? new Date().toISOString().slice(0, 10), share_pct: String(value.share_pct ?? 30),
@@ -345,28 +351,40 @@ function InvestorEditor({ value, onClose, onCreated, onDeleted }: {
   const set = (k: string, v: string | boolean) => setF((x) => ({ ...x, [k]: v }));
   const isNew = !value?.id;
   const submit = async () => {
-    const pct = Number(f.share_pct);
+    const num = (k: string) => String(f[k] ?? '').replace(/[, $%]/g, '').trim();
+    const pct = Number(num('share_pct'));
+    const target = num('target_return_pct'); const day = num('payout_day');
+    const initial = Number(num('initial') || 0);
     if (!String(f.name).trim()) { toast({ title: 'Give the investor a name', tone: 'danger' }); return; }
-    if (!(pct >= 0 && pct <= 100)) { toast({ title: 'Share must be between 0 and 100%', tone: 'danger' }); return; }
+    if (num('share_pct') === '' || !(pct >= 0 && pct <= 100)) { toast({ title: 'Share must be a number from 0 to 100%', tone: 'danger' }); return; }
+    if (target !== '' && !(Number(target) >= 0)) { toast({ title: 'Target return must be a number (or leave it blank)', tone: 'danger' }); return; }
+    if (day !== '' && !(Number.isInteger(Number(day)) && Number(day) >= 1 && Number(day) <= 31)) { toast({ title: 'Payout day must be 1 to 31 (or blank)', tone: 'danger' }); return; }
+    if (isNew && !(initial >= 0)) { toast({ title: 'Initial investment must be a number', tone: 'danger' }); return; }
     setBusy(true);
+    // If the investor saved but the first investment didn't, keep editing that investor instead of creating a second one.
+    let savedId = value?.id ?? created.current;
     try {
-      const row = await save<VInvestor>('investor', { id: value?.id, ...f, share_pct: pct });
-      const initial = Number(String(f.initial).replace(/[, $]/g, ''));
+      const row = await save<VInvestor>('investor', { id: savedId, ...f, share_pct: pct, target_return_pct: target === '' ? '' : Number(target), payout_day: day === '' ? '' : Number(day) });
+      savedId = row.id; created.current = row.id;
       if (isNew && initial > 0) {
         const cat = data.categories.find((c) => c.kind === 'capital_in')?.id ?? null;
         await save('entry', { month: f.initialMonth, investor_id: row.id, kind: 'capital_in', category_id: cat, label: 'Initial investment', amount: initial });
       }
       toast({ title: isNew ? 'Investor created' : 'Saved', tone: 'success' });
+      created.current = undefined;
       onClose();
       if (isNew) onCreated?.(row.id);
-    } catch (e) { toast({ title: (e as Error).message, tone: 'danger' }); } finally { setBusy(false); }
+    } catch (e) {
+      toast({ title: created.current && isNew ? 'Investor saved, but the initial investment wasn’t' : 'Not saved', body: (e as Error).message, tone: 'danger' });
+    } finally { setBusy(false); }
   };
   return (
     <Sheet open={!!value} onClose={onClose} title={isNew ? 'New investor' : `Edit ${value?.name}`} width={600}
       footer={<div className="flex w-full items-center gap-2">
         {!isNew && <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={async () => {
           if (!confirm(`Delete ${value?.name} and every entry on their team? This cannot be undone.`)) return;
-          await remove('investor', value!.id!); onClose(); onDeleted?.();
+          try { await remove('investor', value!.id!); toast({ title: 'Investor deleted' }); onClose(); onDeleted?.(); }
+          catch (e) { toast({ title: 'Not deleted', body: (e as Error).message, tone: 'danger' }); }
         }}>Delete</Button>}
         <div className="flex-1" />
         <Button variant="glass" onClick={onClose}>Cancel</Button>

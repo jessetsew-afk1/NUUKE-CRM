@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { CopyPlus, DownloadCloud, Pencil, Plus, Repeat, Trash2, Wallet } from 'lucide-react';
+import { CopyPlus, DownloadCloud, FileDown, Pencil, Plus, Repeat, Trash2, Wallet } from 'lucide-react';
 import { useVaultMutations, type CrmMonth } from '@/data/vault';
 import { INVESTOR_ONLY, KINDS, KIND_ORDER, computePayment, fmtValue, monthLabel, periodLabel, type Kind, type VEntry } from '@/lib/finance';
 import { Button, Empty, Input, Panel, PanelHeader, Picker, Pill, Sheet, Switch, Textarea } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { monthOptions, show, useV } from './parts';
 import { PaymentEditor, type PaymentDraft } from './Payment';
+import { ExportSheet } from './ExportSheet';
 
 /* ================================================================ ledger */
 export function Ledger() {
@@ -16,12 +17,17 @@ export function Ledger() {
   const [editing, setEditing] = useState<Partial<VEntry> | null>(null);
   const [paying, setPaying] = useState<PaymentDraft | null>(null);
   const { rollRecurring } = useVaultMutations();
+  const [rolling, setRolling] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const toast = useToast();
   const set = useMemo(() => new Set(months), [months]);
   const rows = data.entries.filter((e) => set.has(e.month) && (kind === 'all' || e.kind === kind)
     && (who === 'all' || (who === 'company' ? e.investor_id == null : e.investor_id === Number(who))))
     .sort((a, b) => b.month.localeCompare(a.month) || Number(!!b.payment_id) - Number(!!a.payment_id) || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
   const lastMonth = months[months.length - 1];
+  // With "Every kind", a client payment shows as one row; filtered to one kind, its lines show on their own.
+  const grouped = kind === 'all';
+  const shownCount = grouped ? new Set(rows.map((e) => (e.payment_id ? `p${e.payment_id}` : e.id))).size : rows.length;
   const recurringHere = data.entries.filter((e) => e.month === lastMonth && e.recurring).length;
 
   return (
@@ -35,11 +41,15 @@ export function Ledger() {
               ...data.investors.map((i) => ({ value: String(i.id), label: `${i.name}'s team` }))]} />
           <div className="ml-auto flex flex-wrap gap-2">
             {recurringHere > 0 && (
-              <Button variant="glass" icon={<Repeat className="size-4" />} onClick={async () => {
-                const n = await rollRecurring(lastMonth);
-                toast({ title: n ? `${n} repeating ${n === 1 ? 'entry' : 'entries'} copied to ${monthLabel(addOne(lastMonth), true)}` : 'Already copied', tone: n ? 'success' : undefined });
-              }}>Copy repeating to next month</Button>
+              <Button variant="glass" icon={<Repeat className="size-4" />} loading={rolling} onClick={async () => {
+                setRolling(true);
+                try {
+                  const n = await rollRecurring(lastMonth);
+                  toast({ title: n ? `${n} repeating ${n === 1 ? 'entry' : 'entries'} copied to ${monthLabel(addOne(lastMonth), true)}` : 'Already copied', tone: n ? 'success' : undefined });
+                } catch (e) { toast({ title: 'Not copied', body: (e as Error).message, tone: 'danger' }); } finally { setRolling(false); }
+              }}>Copy repeating to {monthLabel(addOne(lastMonth))}</Button>
             )}
+            <Button variant="glass" icon={<FileDown className="size-4" />} onClick={() => setExporting(true)}>PDF</Button>
             <Button variant="glass" icon={<Plus className="size-4" />} onClick={() => setEditing({ month: period.preset === 'all' ? lastMonth : period.to, kind: 'expense', investor_id: who !== 'all' && who !== 'company' ? Number(who) : null })}>Other money in / out</Button>
             <Button variant="iris" icon={<Wallet className="size-4" />} onClick={() => setPaying({ month: period.preset === 'all' ? lastMonth : period.to, investor_id: who !== 'all' && who !== 'company' ? Number(who) : null })}>Log a client payment</Button>
           </div>
@@ -49,21 +59,23 @@ export function Ledger() {
       <CrmPull month={lastMonth} investorId={who !== 'all' && who !== 'company' ? Number(who) : null} />
 
       <Panel padded={false}>
-        <div className="p-5 pb-2"><PanelHeader title="Entries" sub={`${periodLabel(months)} · ${rows.length} ${rows.length === 1 ? 'entry' : 'entries'}`} /></div>
+        <div className="p-5 pb-2"><PanelHeader title="Entries" sub={`${periodLabel(months)} · ${shownCount} ${shownCount === 1 ? 'entry' : 'entries'}`} /></div>
         {!rows.length ? (
           <Empty title="Nothing here yet" body="Add revenue, salaries, rent, commissions, taxes… one line per item, per month."
             action={<Button variant="iris" icon={<Wallet className="size-4" />} onClick={() => setPaying({ month: lastMonth, investor_id: null })}>Log the first client payment</Button>} />
-        ) : <EntryTable rows={rows} onEdit={setEditing} />}
+        ) : <EntryTable rows={rows} onEdit={setEditing} grouped={grouped} />}
       </Panel>
 
       <EntryEditor value={editing} onClose={() => setEditing(null)} />
       <PaymentEditor draft={paying} onClose={() => setPaying(null)} />
+      <ExportSheet open={exporting} onClose={() => setExporting(false)}
+        preset={{ what: kind === 'all' ? 'overall' : `kind:${kind}`, team: who === 'all' || who === 'company' ? 'company' : who }} />
     </div>
   );
 }
 const addOne = (m: string) => { const d = new Date(`${m}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 10); };
 
-export function EntryTable({ rows, onEdit, hideWho }: { rows: VEntry[]; onEdit: (e: VEntry) => void; hideWho?: boolean }) {
+export function EntryTable({ rows, onEdit, hideWho, grouped = true }: { rows: VEntry[]; onEdit: (e: VEntry) => void; hideWho?: boolean; grouped?: boolean }) {
   const { data } = useV();
   const cats = new Map(data.categories.map((c) => [c.id, c.name]));
   const invs = new Map(data.investors.map((i) => [i.id, i.name]));
@@ -72,7 +84,7 @@ export function EntryTable({ rows, onEdit, hideWho }: { rows: VEntry[]; onEdit: 
   // A logged client payment shows once, as one row, however many lines it put in the books.
   const seen = new Set<number>();
   const items = rows.filter((e) => {
-    if (!e.payment_id || !payments.has(e.payment_id)) return true;
+    if (!grouped || !e.payment_id || !payments.has(e.payment_id)) return true;
     if (seen.has(e.payment_id)) return false;
     seen.add(e.payment_id);
     return true;
@@ -87,7 +99,7 @@ export function EntryTable({ rows, onEdit, hideWho }: { rows: VEntry[]; onEdit: 
         <tbody>
           {items.map((e) => {
             const pay = e.payment_id ? payments.get(e.payment_id) : undefined;
-            if (pay) {
+            if (pay && grouped) {
               const res = computePayment(pay.details, data.categories);
               const ccy = pay.details.route === 'GBP>PKR' ? '£' : '$';
               return (
@@ -112,12 +124,12 @@ export function EntryTable({ rows, onEdit, hideWho }: { rows: VEntry[]; onEdit: 
             const k = KINDS[e.kind];
             const inflow = e.kind === 'revenue' || e.kind === 'other_income' || e.kind === 'capital_in';
             return (
-              <tr key={e.id} className="group cursor-pointer border-t border-[color:var(--hairline,rgba(127,127,127,.15))] hover:bg-[var(--fill)]" onClick={() => onEdit(e)}>
+              <tr key={e.id} className="group cursor-pointer border-t border-[color:var(--hairline,rgba(127,127,127,.15))] hover:bg-[var(--fill)]" onClick={() => (pay ? setPaying({ payment: pay }) : onEdit(e))}>
                 <td className="whitespace-nowrap px-5 py-2.5">{monthLabel(e.month)}</td>
                 <td><span className="flex items-center gap-2 whitespace-nowrap"><i className="size-2.5 rounded-full" style={{ background: k.color }} />{k.label}</span></td>
                 <td className="max-w-[320px]">
                   <div className="truncate font-semibold">{(e.category_id && cats.get(e.category_id)) || '—'}</div>
-                  {(e.label || e.note) && <div className="text-3 truncate text-[12px]">{[e.label, e.note].filter(Boolean).join(' · ')}</div>}
+                  {(e.label || e.note || pay) && <div className="text-3 truncate text-[12px]">{[pay && `Part of ${pay.client || 'a client'} payment`, e.label, e.note].filter(Boolean).join(' · ')}</div>}
                 </td>
                 {!hideWho && <td className="whitespace-nowrap">{e.investor_id ? <Pill tone="iris">{invs.get(e.investor_id) ?? 'Investor'}</Pill> : <span className="text-3">Company</span>}</td>}
                 <td className={clsx('tabular whitespace-nowrap px-5 text-right font-bold', inflow ? 'text-ok' : '')}>
@@ -149,19 +161,22 @@ export function EntryEditor({ value, onClose, lockInvestor }: { value: Partial<V
     if (!value) return;
     setF({
       ...value, currency: value.currency ?? 'USD',
-      amountText: value.id ? String(value.currency === 'PKR' ? value.original_amount ?? '' : value.amount ?? '') : '',
+      // Pre-filled amounts (e.g. "Record payout" with what's owed) show too, not just saved ones.
+      amountText: String((value.currency === 'PKR' ? value.original_amount : value.amount) ?? ''),
       fxText: String(value.fx ?? rate), newType: '',
     });
   }, [value, rate]);
   const kind = (f.kind ?? 'revenue') as Kind;
   const cats = data.categories.filter((c) => c.kind === kind && (!c.archived || c.id === f.category_id));
   const typed = Number(String(f.amountText ?? '').replace(/[, ]/g, ''));
-  const fx = Number(f.fxText) || rate;
+  const fx = Number(f.fxText) > 0 ? Number(f.fxText) : rate;
   const usdAmount = f.currency === 'PKR' ? typed / fx : typed;
   const needsInvestor = INVESTOR_ONLY.includes(kind);
 
   const submit = async () => {
     if (!(typed > 0)) { toast({ title: 'Type an amount above zero', tone: 'danger' }); return; }
+    if (!f.month) { toast({ title: 'Pick a month', tone: 'danger' }); return; }
+    if (f.currency === 'PKR' && !(Number(f.fxText) > 0)) { toast({ title: 'The rate must be above zero', tone: 'danger' }); return; }
     if (needsInvestor && !f.investor_id) { toast({ title: `${KINDS[kind].label} must belong to an investor`, tone: 'danger' }); return; }
     setBusy(true);
     try {
@@ -183,7 +198,10 @@ export function EntryEditor({ value, onClose, lockInvestor }: { value: Partial<V
   return (
     <Sheet open={!!value} onClose={onClose} title={f.id ? 'Edit entry' : 'Add money in or out'} width={560}
       footer={<div className="flex w-full items-center gap-2">
-        {f.id && <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={async () => { if (!confirm('Delete this entry?')) return; await remove('entry', f.id!); onClose(); }}>Delete</Button>}
+        {f.id && <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={async () => {
+          if (!confirm('Delete this entry?')) return;
+          try { await remove('entry', f.id!); toast({ title: 'Entry deleted' }); onClose(); } catch (e) { toast({ title: 'Not deleted', body: (e as Error).message, tone: 'danger' }); }
+        }}>Delete</Button>}
         {f.id && <Button variant="ghost" icon={<CopyPlus className="size-4" />} onClick={() => setF({ ...f, id: undefined })}>Duplicate</Button>}
         <div className="flex-1" />
         <Button variant="glass" onClick={onClose}>Cancel</Button>
@@ -254,16 +272,26 @@ export function CrmPull({ month, investorId }: { month: string; investorId: numb
   };
   useEffect(() => { if (open) void load(); }, [open, month, investorId]); // eslint-disable-line react-hooks/exhaustive-deps
   const cat = (kind: Kind, name: string) => data.categories.find((c) => c.kind === kind && c.name === name)?.id ?? null;
+  const [busy, setBusy] = useState<string | null>(null);
+  // Already in the books for this month and team? Then "Add" would count it twice.
+  const already = (label: string) => data.entries.some((e) => e.month === month && (e.investor_id ?? null) === investorId && e.label === label);
   const add = async (kind: Kind, amount: number, label: string, catName?: string, pkr?: number) => {
-    if (!(amount > 0)) return;
-    await save('entry', { month, investor_id: investorId, kind, category_id: catName ? cat(kind, catName) : null, label, amount: Math.round(amount * 100) / 100,
-      currency: pkr ? 'PKR' : 'USD', original_amount: pkr ?? null, fx: pkr ? rate : null });
-    toast({ title: `${KINDS[kind].label} added from the CRM`, tone: 'success' });
+    if (!(amount > 0) || busy) return;
+    if (already(label) && !confirm(`"${label}" is already in ${monthLabel(month, true)}. Add it again?`)) return;
+    setBusy(label);
+    try {
+      await save('entry', { month, investor_id: investorId, kind, category_id: catName ? cat(kind, catName) : null, label, amount: Math.round(amount * 100) / 100,
+        currency: pkr ? 'PKR' : 'USD', original_amount: pkr ?? null, fx: pkr ? rate : null });
+      toast({ title: `${KINDS[kind].label} added from the CRM`, tone: 'success' });
+    } catch (e) { toast({ title: 'Not added', body: (e as Error).message, tone: 'danger' }); } finally { setBusy(null); }
   };
   const add2 = async (key: 'new_clients' | 'agents', v: number) => {
     const cur = data.stats.find((s) => s.month === month && (s.investor_id ?? null) === investorId);
-    await save('stats', { month, investor_id: investorId, data: { ...(cur?.data ?? {}), [key]: v } });
-    toast({ title: 'Saved to monthly numbers', tone: 'success' });
+    setBusy(key);
+    try {
+      await save('stats', { month, investor_id: investorId, data: { ...(cur?.data ?? {}), [key]: v } });
+      toast({ title: 'Saved to monthly numbers', tone: 'success' });
+    } catch (e) { toast({ title: 'Not saved', body: (e as Error).message, tone: 'danger' }); } finally { setBusy(null); }
   };
   const noAgents = investorId != null && !agents?.length;
   return (
@@ -278,28 +306,29 @@ export function CrmPull({ month, investorId }: { month: string; investorId: numb
             : loading || !crm ? <p className="text-2 text-[13.5px]">Reading the CRM…</p> : (
               <div className="grid gap-2 sm:grid-cols-2">
                 {[
-                  ['Payments received (PayPal links)', crm.payments_usd, `${crm.payments_count} paid`, () => add('revenue', crm.payments_usd, 'Payments received (CRM)')],
-                  ['Won deals value', crm.deals_won_usd, `${crm.deals_won} deals`, () => add('revenue', crm.deals_won_usd, 'Won deals (CRM)')],
-                  ['PayPal fees', crm.paypal_fees_usd, 'cost of delivery', () => add('direct_cost', crm.paypal_fees_usd, 'PayPal fees (CRM)', 'Payment processing fees (PayPal)')],
-                  ['Refunds', crm.refunds_usd, '', () => add('refund', crm.refunds_usd, 'Refunds (CRM)', 'Client refunds')],
-                  ['Commissions on paid links', crm.commission_usd, '', () => add('commission', crm.commission_usd, 'Commissions (CRM)', 'Closer commission')],
-                  ['Base salaries on file', crm.salaries_pkr / rate, `Rs ${Math.round(crm.salaries_pkr).toLocaleString()} @ ${rate}`, () => add('salary', crm.salaries_pkr / rate, 'Salaries on file (CRM)', undefined, crm.salaries_pkr)],
-                ].map(([label, v, sub, fn]) => (
+                  ['Payments received (PayPal links)', crm.payments_usd, `${crm.payments_count} paid`, () => add('revenue', crm.payments_usd, 'Payments received (CRM)'), 'Payments received (CRM)'],
+                  ['Won deals value', crm.deals_won_usd, `${crm.deals_won} deals`, () => add('revenue', crm.deals_won_usd, 'Won deals (CRM)'), 'Won deals (CRM)'],
+                  ['PayPal fees', crm.paypal_fees_usd, 'cost of delivery', () => add('direct_cost', crm.paypal_fees_usd, 'PayPal fees (CRM)', 'Payment processing fees (PayPal)'), 'PayPal fees (CRM)'],
+                  ['Refunds', crm.refunds_usd, '', () => add('refund', crm.refunds_usd, 'Refunds (CRM)', 'Client refunds'), 'Refunds (CRM)'],
+                  ['Commissions on paid links', crm.commission_usd, '', () => add('commission', crm.commission_usd, 'Commissions (CRM)', 'Closer commission'), 'Commissions (CRM)'],
+                  ['Base salaries on file', crm.salaries_pkr / rate, `Rs ${Math.round(crm.salaries_pkr).toLocaleString()} @ ${rate}`, () => add('salary', crm.salaries_pkr / rate, 'Salaries on file (CRM)', undefined, crm.salaries_pkr), 'Salaries on file (CRM)'],
+                ].map(([label, v, sub, fn, entryLabel]) => (
                   <div key={label as string} className="fill flex items-center justify-between gap-3 rounded-2xl px-3.5 py-2.5">
                     <div className="min-w-0"><div className="text-[13.5px] font-semibold">{label as string}</div><div className="text-3 text-[12px]">{sub as string}</div></div>
                     <div className="flex items-center gap-2">
                       <span className="tabular font-bold">{show(v as number)}</span>
-                      <Button size="sm" variant="glass" disabled={!(Number(v) > 0)} onClick={() => void (fn as () => Promise<void>)()}>Add</Button>
+                      <Button size="sm" variant="glass" disabled={!(Number(v) > 0) || !!busy} loading={busy === entryLabel}
+                        onClick={() => void (fn as () => Promise<void>)()}>{already(entryLabel as string) ? 'Added ✓' : 'Add'}</Button>
                     </div>
                   </div>
                 ))}
                 <div className="fill flex items-center justify-between gap-3 rounded-2xl px-3.5 py-2.5">
                   <div><div className="text-[13.5px] font-semibold">Clients closed (won deals)</div><div className="text-3 text-[12px]">to monthly numbers</div></div>
-                  <div className="flex items-center gap-2"><span className="tabular font-bold">{crm.deals_won}</span><Button size="sm" variant="glass" onClick={() => void add2('new_clients', crm.deals_won)}>Use</Button></div>
+                  <div className="flex items-center gap-2"><span className="tabular font-bold">{crm.deals_won}</span><Button size="sm" variant="glass" disabled={!!busy} loading={busy === 'new_clients'} onClick={() => void add2('new_clients', crm.deals_won)}>Use</Button></div>
                 </div>
                 <div className="fill flex items-center justify-between gap-3 rounded-2xl px-3.5 py-2.5">
                   <div><div className="text-[13.5px] font-semibold">Active sales agents</div><div className="text-3 text-[12px]">to monthly numbers</div></div>
-                  <div className="flex items-center gap-2"><span className="tabular font-bold">{crm.agents}</span><Button size="sm" variant="glass" onClick={() => void add2('agents', crm.agents)}>Use</Button></div>
+                  <div className="flex items-center gap-2"><span className="tabular font-bold">{crm.agents}</span><Button size="sm" variant="glass" disabled={!!busy} loading={busy === 'agents'} onClick={() => void add2('agents', crm.agents)}>Use</Button></div>
                 </div>
                 <p className="text-3 text-[12px] sm:col-span-2">Pick either payments received or won deals as revenue, not both, or it will count twice. Check the figures before adding: the CRM only knows what was recorded in it.</p>
               </div>

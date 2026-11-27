@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useVaultMutations } from '@/data/vault';
 import { STAT_FIELDS, monthLabel, monthRange } from '@/lib/finance';
@@ -37,7 +37,7 @@ export function Numbers({ investorId, compact }: { investorId?: number; compact?
         <table className="text-[13px]" style={{ minWidth: 140 + fields.length * 118 }}>
           <thead>
             <tr className="text-3 text-left text-[11px] font-bold uppercase tracking-wide">
-              <th className="sticky left-0 z-10 bg-[var(--bg-solid,var(--glass-strong))] px-5 py-2">Month</th>
+              <th className="sticky left-0 z-10 bg-[var(--canvas)] px-5 py-2">Month</th>
               {fields.map((f) => (
                 <th key={f.key} className="px-1.5 align-bottom">
                   <span className="flex items-end gap-0.5 leading-tight">{f.label}<Def text={f.def} /></span>
@@ -59,23 +59,38 @@ function NumbersRow({ month, investorId, fields }: { month: string; investorId: 
   const { save } = useVaultMutations();
   const toast = useToast();
   const row = data.stats.find((s) => s.month === month && (s.investor_id ?? null) === investorId);
-  const [draft, setDraft] = useState<Record<string, string>>({});
+  const shown = (v: unknown) => (v == null ? '' : String(v));
+  const [draft, setDraft] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((k) => [k, shown(row?.data?.[k])])));
+  // Values saved from this row that the server hasn't sent back yet, so a quick second save can't overwrite the first.
+  const pending = useRef<Record<string, number | null>>({});
+  const server = useRef<Record<string, unknown>>(row?.data ?? {});
   useEffect(() => {
-    setDraft(Object.fromEntries(fields.map((k) => [k, row?.data?.[k] == null ? '' : String(row.data[k])])));
+    const prev = server.current; const now = row?.data ?? {};
+    server.current = now;
+    for (const [k, v] of Object.entries(pending.current)) if ((now[k] ?? null) === v) delete pending.current[k];
+    // Only refresh cells nobody is editing: a cell still showing the old saved value takes the new one.
+    setDraft((d) => Object.fromEntries(fields.map((k) => [k, d[k] === undefined || d[k] === shown(prev[k]) ? shown(now[k]) : d[k]])));
   }, [row, fields.join()]); // eslint-disable-line react-hooks/exhaustive-deps
   const commit = async (k: string) => {
-    const before = row?.data?.[k] == null ? '' : String(row.data[k]);
+    const before = k in pending.current ? shown(pending.current[k]) : shown(server.current[k]);
     const raw = (draft[k] ?? '').replace(/[, $]/g, '');
     if (raw === before) return;
-    if (raw !== '' && !Number.isFinite(Number(raw))) { toast({ title: 'Numbers only', tone: 'danger' }); return; }
-    const next: Record<string, number | null> = { ...(row?.data ?? {}) };
-    if (raw === '') delete next[k]; else next[k] = Number(raw);
-    try { await save('stats', { month, investor_id: investorId, data: next }); } catch (e) { toast({ title: (e as Error).message, tone: 'danger' }); }
+    const n = Number(raw);
+    if (raw !== '' && !Number.isFinite(n)) { toast({ title: 'Numbers only', tone: 'danger' }); setDraft((d) => ({ ...d, [k]: before })); return; }
+    if (raw !== '' && n < 0 && k !== 'cash') { toast({ title: 'This one can’t be negative', tone: 'danger' }); setDraft((d) => ({ ...d, [k]: before })); return; }
+    pending.current[k] = raw === '' ? null : n;
+    const next: Record<string, number | null> = { ...(server.current as Record<string, number | null>) };
+    for (const [pk, pv] of Object.entries(pending.current)) { if (pv == null) delete next[pk]; else next[pk] = pv; }
+    try { await save('stats', { month, investor_id: investorId, data: next }); } catch (e) {
+      delete pending.current[k];
+      setDraft((d) => ({ ...d, [k]: shown(server.current[k]) }));
+      toast({ title: 'Not saved', body: (e as Error).message, tone: 'danger' });
+    }
   };
   const isNow = month === thisMonth();
   return (
     <tr className={clsx('border-t border-[color:var(--hairline,rgba(127,127,127,.12))]', isNow && 'bg-[var(--fill)]')}>
-      <td className="sticky left-0 z-10 whitespace-nowrap bg-[var(--bg-solid,var(--glass-strong))] px-5 py-1.5 font-semibold">{monthLabel(month)}</td>
+      <td className="sticky left-0 z-10 whitespace-nowrap bg-[var(--canvas)] px-5 py-1.5 font-semibold">{monthLabel(month)}</td>
       {fields.map((k) => (
         <td key={k} className="px-1.5 py-1">
           <input inputMode="decimal" value={draft[k] ?? ''} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}

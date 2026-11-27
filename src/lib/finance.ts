@@ -330,7 +330,8 @@ export function buildReport(opts: {
   const lifetime = churn ? 1 / churn : null;
   const cac = newClients ? acquisition / newClients : null;
   const ltv = arpa != null && gm != null && lifetime != null ? arpa * gm * lifetime : null;
-  const fixedMonthly = (kinds.salary + kinds.rent + kinds.software + kinds.expense + kinds.interest) / n;
+  // Fixed costs don't move with sales; variable ones (delivery, commission, marketing) do. Tax is on profit, so it isn't in either.
+  const fixedMonthly = (kinds.salary + kinds.rent + kinds.software + kinds.expense + kinds.interest + kinds.depreciation) / n;
   const variableRatio = safe(kinds.direct_cost + kinds.commission + kinds.marketing, p.revenue);
   const contribution = variableRatio != null ? 1 - variableRatio : null;
   const totalCosts = p.costOfSales + p.opex + kinds.depreciation + kinds.interest + kinds.tax;
@@ -368,7 +369,9 @@ export function buildReport(opts: {
     // cash & liquidity
     operating_cash_flow: p.operatingCashFlow, free_cash_flow: p.freeCashFlow, net_cash_flow: p.netCashFlow,
     gross_burn: cashCosts / n, net_burn: netBurn, runway: cash != null && netBurn > 0 ? cash / netBurn : null, cash,
-    break_even: gm ? fixedMonthly / gm : null, break_even_gap: gm ? monthlyRev - fixedMonthly / gm : null,
+    // Revenue where profit (before tax) is zero. No break-even exists if each sale costs more than it brings in.
+    break_even: contribution != null && contribution > 0 ? fixedMonthly / contribution : null,
+    break_even_gap: contribution != null && contribution > 0 ? monthlyRev - fixedMonthly / contribution : null,
     dso: ar != null && p.revenue ? ar / (p.revenue / (n * 30)) : null, dpo: ap != null && cashCosts ? ap / (cashCosts / (n * 30)) : null,
     working_capital: currentAssets != null || currentLiab != null ? (currentAssets ?? 0) - (currentLiab ?? 0) : null,
     current_ratio: currentAssets != null && currentLiab ? currentAssets / currentLiab : null,
@@ -463,7 +466,7 @@ export const METRICS: MetricDef[] = [
   { key: 'gross_burn', name: 'Gross burn', group: 'Cash & liquidity', fmt: 'usd', def: 'Total cash spent per month to run the company.', formula: '(Cost of sales + OPEX + interest + tax) ÷ months' },
   { key: 'net_burn', name: 'Net burn', group: 'Cash & liquidity', fmt: 'usd', better: 'lower', def: 'Cash lost per month when spending is more than income. Zero means not burning cash.', formula: '−Net cash flow ÷ months (if negative)' },
   { key: 'runway', name: 'Cash runway', group: 'Cash & liquidity', fmt: 'months', better: 'higher', def: 'How many months the cash lasts at the current burn.', formula: 'Cash ÷ net burn', needs: 'Cash, and a month that burns cash' },
-  { key: 'break_even', name: 'Break-even revenue', group: 'Cash & liquidity', fmt: 'usd', def: 'Monthly revenue needed to cover all fixed costs: below it we lose money.', formula: 'Monthly fixed costs ÷ gross margin' },
+  { key: 'break_even', name: 'Break-even revenue', group: 'Cash & liquidity', fmt: 'usd', def: 'Monthly revenue needed to cover all fixed costs: below it we lose money. Blank if each sale costs more than it brings in.', formula: 'Monthly fixed costs ÷ contribution margin' },
   { key: 'break_even_gap', name: 'Safety margin over break-even', group: 'Cash & liquidity', fmt: 'usd', better: 'higher', def: 'How far monthly revenue is above (or below) break-even.', formula: 'Monthly revenue − break-even revenue' },
   { key: 'dso', name: 'Days sales outstanding', abbr: 'DSO', group: 'Cash & liquidity', fmt: 'days', better: 'lower', def: 'Average days clients take to pay us.', formula: 'Receivables ÷ revenue per day', needs: 'Owed to us', good: 'Under 30 days' },
   { key: 'dpo', name: 'Days payables outstanding', abbr: 'DPO', group: 'Cash & liquidity', fmt: 'days', def: 'Average days we take to pay our bills.', formula: 'Payables ÷ costs per day', needs: 'Bills we owe' },
@@ -531,7 +534,7 @@ export interface PaymentResult {
   ok: boolean; error?: string; steps: PaymentStep[];
   grossUsd: number; deductionsUsd: number; netCharge: number; convertedPkr: number; landedPkr: number;
   landedUsd: number; fxCostUsd: number; bankUsd: number; keptPct: number | null; effectiveRate: number | null; marketPkr: number;
-  entries: { kind: Kind; category_id: number | null; label: string; amount: number; currency: 'USD' | 'PKR'; original_amount: number | null; fx: number | null }[];
+  entries: { kind: Kind; category_id: number | null; label: string; amount: number; currency: 'USD' | 'PKR'; original_amount: number | null; fx: number | null; recurring?: boolean }[];
 }
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -588,8 +591,9 @@ export function computePayment(d: PaymentDetails, cats: VCategory[]): PaymentRes
   const cat = (kind: Kind, name: string) => cats.find((c) => c.kind === kind && c.name === name)?.id ?? null;
   const who = d.client ? ` · ${d.client}` : '';
   const entries: PaymentResult['entries'] = [
+    // A retainer's revenue line repeats monthly, so it counts toward MRR and ARR.
     { kind: 'revenue', category_id: d.revenue_category_id, label: (d.label || 'Client payment') + who, amount: grossUsd,
-      currency: 'USD', original_amount: null, fx: null },
+      currency: 'USD', original_amount: null, fx: null, recurring: !!d.recurring },
     ...dedUsd.map((x) => ({ kind: x.kind as Kind, category_id: x.category_id, label: `${x.name}${who}`, amount: x.usd, currency: 'USD' as const, original_amount: null, fx: null })),
   ];
   if (fxCostUsd > 0) entries.push({ kind: 'expense', category_id: cat('expense', 'Currency conversion cost'), label: `Conversion cost${who}`, amount: fxCostUsd, currency: 'USD', original_amount: null, fx: null });

@@ -6,7 +6,7 @@ import type { VaultData } from '@/data/vault';
 import {
   addMonths, buildReport, fmtValue, type Report, metricDef, monthKey, monthLabel, monthRange, type Fmt, type PnL,
 } from '@/lib/finance';
-import { Picker, Segmented, spring } from '@/ui/kit';
+import { Floating, Picker, Segmented, spring, useFloating } from '@/ui/kit';
 
 /* ================================================================ context */
 export type Mode = 'simple' | 'pro';
@@ -30,7 +30,8 @@ export function periodMonths(p: Period, known: string[]): string[] {
   const now = thisMonth();
   switch (p.preset) {
     case 'month': return [p.to];
-    case 'quarter': { const q = Math.floor((Number(p.to.slice(5, 7)) - 1) / 3) * 3 + 1; const s = `${p.to.slice(0, 4)}-${String(q).padStart(2, '0')}-01`; return monthRange(s, addMonths(s, 2)); }
+    // Quarter to date: a quarter that isn't over yet stops at the chosen month, so empty future months don't water down averages or MRR.
+    case 'quarter': { const q = Math.floor((Number(p.to.slice(5, 7)) - 1) / 3) * 3 + 1; const s = `${p.to.slice(0, 4)}-${String(q).padStart(2, '0')}-01`; return monthRange(s, p.to); }
     case 'ytd': return monthRange(`${p.to.slice(0, 4)}-01-01`, p.to);
     case '12m': return monthRange(addMonths(p.to, -11), p.to);
     case 'all': return known.length ? monthRange(known[0], known[known.length - 1] > now ? known[known.length - 1] : now) : [now];
@@ -62,7 +63,7 @@ export function PeriodBar() {
       <div className="scroll-x no-scrollbar max-w-full">
       <Segmented<PeriodPreset> className="whitespace-nowrap" size="sm" value={period.preset} onChange={(preset) => setPeriod({ ...period, preset })}
         options={[
-          { value: 'month', label: 'Month' }, { value: 'quarter', label: 'Quarter' }, { value: 'ytd', label: 'Year to date' },
+          { value: 'month', label: 'Month' }, { value: 'quarter', label: 'Quarter to date' }, { value: 'ytd', label: 'Year to date' },
           { value: '12m', label: '12 months' }, { value: 'all', label: 'All time' }, { value: 'custom', label: 'Custom' },
         ]} />
       </div>
@@ -80,21 +81,43 @@ export function PeriodBar() {
 }
 
 /* ============================================================ definitions */
-/** A little ⓘ that shows what a term means. */
+/** A little ⓘ that shows what a term means. Hover on a computer, tap on a phone; it floats above every card. */
 export function Def({ text, formula, good, className }: { text: ReactNode; formula?: string; good?: string; className?: string }) {
   const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLSpanElement>(null);
+  const pinned = useRef(false);
+  const float = useFloating(btn, open, { align: 'center', width: 280, gap: 6, maxHeight: 400 });
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!btn.current?.contains(t) && !pop.current?.contains(t)) { pinned.current = false; setOpen(false); }
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { pinned.current = false; setOpen(false); } };
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc); };
+  }, [open]);
   return (
-    <span className={clsx('relative inline-flex', className)} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <button type="button" aria-label="What is this?" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-        className="text-3 grid size-5 place-items-center rounded-full hover:text-[color:var(--text)]">
+    <span className={clsx('relative inline-flex', className)}
+      onPointerEnter={(e) => { if (e.pointerType === 'mouse') setOpen(true); }}
+      onPointerLeave={(e) => { if (e.pointerType === 'mouse' && !pinned.current) setOpen(false); }}>
+      <button ref={btn} type="button" aria-label="What is this?" aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); pinned.current = !pinned.current || !open; setOpen(pinned.current); }}
+        className="text-3 grid size-6 shrink-0 place-items-center rounded-full hover:text-[color:var(--text)]">
         <Info className="size-3.5" />
       </button>
       {open && (
-        <span className="glass-strong absolute left-1/2 top-6 z-50 w-[280px] -translate-x-1/2 rounded-2xl p-3 text-left text-[12.5px] font-medium normal-case leading-snug tracking-normal shadow-xl">
-          <span className="block">{text}</span>
-          {formula && <span className="text-2 mt-1.5 block font-mono text-[11.5px]">= {formula}</span>}
-          {good && <span className="mt-1.5 block text-[11.5px] font-semibold text-ok">Benchmark: {good}</span>}
-        </span>
+        <Floating>
+          {/* React events bubble through portals: keep taps here from toggling the row behind. */}
+          <span ref={pop} role="tooltip" style={float.style} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}
+            className="glass-strong block overflow-auto rounded-2xl p-3 text-left text-[12.5px] font-medium normal-case leading-snug tracking-normal text-[color:var(--text)] shadow-[0_24px_60px_-20px_rgba(0,0,0,.45)]">
+            <span className="block">{text}</span>
+            {formula && <span className="text-2 mt-1.5 block font-mono text-[11.5px]">= {formula}</span>}
+            {good && <span className="mt-1.5 block text-[11.5px] font-semibold text-ok">Benchmark: {good}</span>}
+          </span>
+        </Floating>
       )}
     </span>
   );
@@ -304,15 +327,16 @@ export function Waterfall({ p, kinds }: { p: PnL; kinds: Record<string, number> 
     { label: 'Tax', value: -kinds.tax, color: '#EE5253' },
     { label: 'Net profit', value: p.netProfit, color: p.netProfit >= 0 ? '#1DD1A1' : '#EE5253', total: true },
   ].filter((s) => s.total || Math.abs(s.value) >= 0.005);
-  const top = Math.max(1, p.revenue, ...steps.map((s) => Math.abs(s.value)));
-  const floor = Math.min(0, p.netProfit);
-  const span = top - floor || 1;
   let run = 0;
   const bars = steps.map((s) => {
     let a: number; let b: number;
     if (s.total) { a = 0; b = s.value; run = s.value; } else { a = run; b = run + s.value; run = b; }
     return { ...s, lo: Math.min(a, b), hi: Math.max(a, b) };
   });
+  // Scale to the lowest and highest point the running total reaches, so no bar runs off the edge.
+  const top = Math.max(1, ...bars.map((b) => b.hi));
+  const floor = Math.min(0, ...bars.map((b) => b.lo));
+  const span = top - floor || 1;
   const pct = (v: number) => ((v - floor) / span) * 100;
   return (
     <div className="space-y-2">
