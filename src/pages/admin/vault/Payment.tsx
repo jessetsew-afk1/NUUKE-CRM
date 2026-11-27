@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, Landmark, Plus, Trash2, X } from 'lucide-react';
 import { useVaultMutations } from '@/data/vault';
 import { computePayment, fmtValue, type PayDeduction, type PaymentDetails, type PayRoute, type VPayment } from '@/lib/finance';
-import { Button, Input, Picker, Sheet, Textarea } from '@/ui/kit';
+import { Button, Input, Picker, Sheet, Switch, Textarea } from '@/ui/kit';
 import { useToast } from '@/ui/toast';
 import { monthOptions, thisMonth, useV } from './parts';
 
@@ -76,7 +76,8 @@ export function PaymentEditor({ draft, onClose }: { draft: PaymentDraft | null; 
     <Sheet open={!!draft} onClose={onClose} width={1000} title={draft?.payment ? 'Edit client payment' : 'Log a client payment'}
       footer={<div className="flex w-full items-center gap-2">
         {draft?.payment && <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={async () => {
-          if (!confirm('Delete this payment and all its lines?')) return; await remove('payment', draft.payment!.id); onClose();
+          if (!confirm('Delete this payment and all its lines?')) return;
+          try { await remove('payment', draft.payment!.id); toast({ title: 'Payment deleted' }); onClose(); } catch (e) { toast({ title: 'Not deleted', body: (e as Error).message, tone: 'danger' }); }
         }}>Delete</Button>}
         <div className="flex-1" />
         <Button variant="glass" onClick={onClose}>Cancel</Button>
@@ -94,6 +95,13 @@ export function PaymentEditor({ draft, onClose }: { draft: PaymentDraft | null; 
               <Picker label="Month" value={month} onChange={setMonth} options={monthOptions(knownMonths)} />
               <Picker className="sm:col-span-2" label="Belongs to" value={inv ? String(inv) : 'company'} onChange={(v) => setInv(v === 'company' ? null : Number(v))}
                 options={[{ value: 'company', label: 'The company (no investor)' }, ...data.investors.map((i) => ({ value: String(i.id), label: `${i.name}'s team` }))]} />
+              <div className="fill flex items-center justify-between gap-3 rounded-[18px] p-3.5 sm:col-span-2">
+                <div>
+                  <div className="text-[14px] font-bold">Monthly retainer</div>
+                  <div className="text-2 text-[12.5px]">This client pays every month: it counts toward recurring revenue (MRR).</div>
+                </div>
+                <Switch checked={!!d.recurring} onChange={(recurring) => set('recurring', recurring)} />
+              </div>
             </div>
           </Section>
 
@@ -122,7 +130,7 @@ export function PaymentEditor({ draft, onClose }: { draft: PaymentDraft | null; 
                   <button type="button" aria-label="Remove" onClick={() => set('deductions', d.deductions.filter((y) => y.id !== x.id))} className="text-3 grid size-9 place-items-center rounded-xl hover:text-bad sm:order-last"><X className="size-4" /></button>
                   <Picker className="col-span-2 sm:col-span-1" value={x.category_id ? `${x.kind}:${x.category_id}` : `${x.kind}:`} onChange={(v) => { const [k, id] = v.split(':'); setDed(x.id, { kind: k as PayDeduction['kind'], category_id: id ? Number(id) : null }); }}
                     options={[
-                      { value: 'direct_cost:', label: 'Fee (no type)' }, { value: 'tax:', label: 'Tax (no type)' },
+                      { value: 'direct_cost:', label: 'Fee (no type)' }, { value: 'tax:', label: 'Tax (no type)' }, { value: 'expense:', label: 'Expense (no type)' },
                       ...feeCats.map((c) => ({ value: `${c.kind}:${c.id}`, label: `${c.kind === 'tax' ? 'Tax' : c.kind === 'expense' ? 'Expense' : 'Fee'} · ${c.name}` })),
                     ]} />
                   <MiniNum value={x.pct} suffix="%" onChange={(v) => setDed(x.id, { pct: v })} />
@@ -139,10 +147,14 @@ export function PaymentEditor({ draft, onClose }: { draft: PaymentDraft | null; 
               {d.route !== 'USD>PKR' && <NumInput label="Rs per £1" placeholder="360" value={d.gbp_pkr} onValue={(v) => set('gbp_pkr', v ?? 0)} />}
               {d.route === 'USD>PKR' && <NumInput label="Rs per $1" placeholder="278" value={d.usd_pkr} onValue={(v) => set('usd_pkr', v ?? 0)} />}
               <NumInput label="Bank charges (Rs)" placeholder="0" value={d.bank_fee_pkr} onValue={(v) => set('bank_fee_pkr', v ?? 0)} />
-              <NumInput label="Actually landed (Rs, optional)" placeholder="from your bank statement" value={d.received_pkr}
-                onValue={(v) => set('received_pkr', v)} hint="If it differs, the gap counts as conversion cost." />
-              <NumInput label="Market rate (Rs per $1)" value={d.ref_usd_pkr} onValue={(v) => set('ref_usd_pkr', v ?? 0)}
-                hint="What $1 is really worth today: used to measure what the conversion cost you." />
+              <div>
+                <NumInput label="Actually landed (Rs, optional)" placeholder="from your bank statement" value={d.received_pkr} onValue={(v) => set('received_pkr', v)} />
+                <p className="text-3 mt-1 text-[11.5px] leading-snug">If it differs, the gap counts as conversion cost.</p>
+              </div>
+              <div>
+                <NumInput label="Market rate (Rs per $1)" value={d.ref_usd_pkr} onValue={(v) => set('ref_usd_pkr', v ?? 0)} />
+                <p className="text-3 mt-1 text-[11.5px] leading-snug">What $1 is really worth today: used to measure what the conversion cost you.</p>
+              </div>
             </div>
           </Section>
           <Textarea label="Note (optional)" rows={2} value={d.note} onChange={(e) => set('note', e.target.value)} />
@@ -206,25 +218,25 @@ export function Journey({ res, compact }: { res: ReturnType<typeof computePaymen
         ) : (
           <ol className="mt-4">
             <AnimatePresence initial={false}>
-              {res.steps.map((s, i) => (
+              {res.steps.map((s, i) => { const gain = s.kind === 'minus' && s.amount < 0; return (
                 <motion.li key={`${s.label}-${i}`} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
                   className="relative flex items-start gap-3 pb-3 last:pb-0">
                   {i < res.steps.length - 1 && <span className="absolute left-[11px] top-6 h-full w-px bg-white/15" />}
                   <span className={clsx('relative mt-0.5 grid size-[23px] shrink-0 place-items-center rounded-full text-[11px] font-black',
-                    s.kind === 'start' ? 'bg-[#30C46C]' : s.kind === 'end' ? 'bg-[linear-gradient(135deg,#7C5CFF,#5AB8FF)]' : s.kind === 'minus' ? 'bg-[#FF6B6B]/90' : s.kind === 'convert' ? 'bg-[#FECA57] text-black' : 'bg-white/15')}>
-                    {s.kind === 'minus' ? '−' : s.kind === 'convert' ? '⇄' : s.kind === 'end' ? '✓' : s.kind === 'start' ? '$' : <ArrowDown className="size-3" />}
+                    s.kind === 'start' ? 'bg-[#30C46C]' : s.kind === 'end' ? 'bg-[linear-gradient(135deg,#7C5CFF,#5AB8FF)]' : gain ? 'bg-[#30C46C]' : s.kind === 'minus' ? 'bg-[#FF6B6B]/90' : s.kind === 'convert' ? 'bg-[#FECA57] text-black' : 'bg-white/15')}>
+                    {gain ? '+' : s.kind === 'minus' ? '−' : s.kind === 'convert' ? '⇄' : s.kind === 'end' ? '✓' : s.kind === 'start' ? '$' : <ArrowDown className="size-3" />}
                   </span>
                   <div className="flex min-w-0 flex-1 items-baseline justify-between gap-3">
                     <div className="min-w-0">
                       <div className={clsx('truncate text-[13.5px]', s.kind === 'end' || s.kind === 'start' ? 'font-extrabold' : 'text-white/80')}>{s.label}</div>
                       {s.sub && <div className="text-[11.5px] text-white/45">{s.sub}</div>}
                     </div>
-                    <div className={clsx('tabular shrink-0 font-display font-extrabold', s.kind === 'end' ? 'text-[22px] text-[#8BE9B3]' : s.kind === 'start' ? 'text-[18px]' : 'text-[14.5px]', s.kind === 'minus' && 'text-[#FF8E8E]')}>
-                      {s.amount < 0 ? '−' : ''}{money(s.amount, s.currency)}
+                    <div className={clsx('tabular shrink-0 font-display font-extrabold', s.kind === 'end' ? 'text-[22px] text-[#8BE9B3]' : s.kind === 'start' ? 'text-[18px]' : 'text-[14.5px]', gain ? 'text-[#8BE9B3]' : s.kind === 'minus' && 'text-[#FF8E8E]')}>
+                      {gain ? '+' : s.amount < 0 ? '−' : ''}{money(s.amount, s.currency)}
                     </div>
                   </div>
                 </motion.li>
-              ))}
+              ); })}
             </AnimatePresence>
           </ol>
         )}

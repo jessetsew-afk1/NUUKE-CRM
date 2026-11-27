@@ -33,6 +33,9 @@ function General() {
   }, [data.settings]);
   const [busy, setBusy] = useState(false);
   const go = async () => {
+    const rate = Number(f.pkr_rate); const tax = Number(f.tax_rate);
+    if (!(rate > 0)) { toast({ title: 'The rupee rate must be above zero', tone: 'danger' }); return; }
+    if (f.tax_rate !== '' && !(tax >= 0 && tax <= 100)) { toast({ title: 'Tax rate must be 0 to 100%', tone: 'danger' }); return; }
     setBusy(true);
     try {
       await saveSettings({ company: f.company.trim() || 'NUUKE', pkr_rate: Number(f.pkr_rate) || 280, tax_rate: f.tax_rate === '' ? undefined : Number(f.tax_rate),
@@ -118,7 +121,10 @@ function Types() {
       <div className="mt-4 divide-y divide-[color:var(--hairline,rgba(127,127,127,.15))]">
         {list.map((c) => (
           <TypeRow key={c.id} c={c} used={used.has(c.id)} onSave={(p) => void upd(c, p)}
-            onDelete={async () => { if (!confirm(`Delete "${c.name}"? Entries using it keep their amounts but lose the type.`)) return; await remove('category', c.id); }} />
+            onDelete={async () => {
+              if (!confirm(`Delete "${c.name}"? Entries using it keep their amounts but lose the type.`)) return;
+              try { await remove('category', c.id); toast({ title: `"${c.name}" deleted` }); } catch (e) { toast({ title: 'Not deleted', body: (e as Error).message, tone: 'danger' }); }
+            }} />
         ))}
         {!list.length && <div className="text-3 py-4 text-[13px]">No types for this kind yet.</div>}
       </div>

@@ -3,9 +3,10 @@
  * (iOS-style) and every surface is frosted glass over the aurora.
  */
 import {
-  forwardRef, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes,
-  type ReactNode, type TextareaHTMLAttributes,
+  forwardRef, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes,
+  type ReactNode, type RefObject, type TextareaHTMLAttributes,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, type HTMLMotionProps } from 'framer-motion';
 import clsx from 'clsx';
 import { Check, ChevronDown, Loader2, X } from 'lucide-react';
@@ -170,6 +171,50 @@ export interface PickerOption<V extends string = string> {
   group?: string;
 }
 
+/* ================================================================ Floating */
+/**
+ * Where a menu or popover should sit so nothing can cover or clip it: drawn on
+ * document.body above every card and sheet, under its anchor, flipped above it
+ * when there's no room below, and kept inside the screen. Follows the anchor on
+ * scroll and resize.
+ */
+export function useFloating(anchor: RefObject<HTMLElement | null>, open: boolean, opts: { align?: 'left' | 'right' | 'center'; width?: number; gap?: number; maxHeight?: number } = {}) {
+  const { align = 'left', width, gap = 8, maxHeight = 320 } = opts;
+  const [style, setStyle] = useState<CSSProperties>({ position: 'fixed', visibility: 'hidden' });
+  const [above, setAbove] = useState(false);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const el = anchor.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const vw = window.innerWidth; const vh = window.innerHeight; const pad = 8;
+      const w = Math.min(width ?? r.width, vw - pad * 2);
+      const below = vh - r.bottom - gap - pad; const up = r.top - gap - pad;
+      const flip = below < Math.min(maxHeight, 200) && up > below;
+      const room = Math.max(120, Math.min(maxHeight, flip ? up : below));
+      let left = align === 'right' ? r.right - w : align === 'center' ? r.left + r.width / 2 - w / 2 : r.left;
+      left = Math.max(pad, Math.min(left, vw - w - pad));
+      setAbove(flip);
+      setStyle({
+        position: 'fixed', left, zIndex: 120, maxHeight: room,
+        // A menu can grow wider than its button, but never past the right edge of the screen.
+        ...(width ? { width: w } : { minWidth: w, maxWidth: vw - left - pad }),
+        ...(flip ? { bottom: vh - r.top + gap } : { top: r.bottom + gap }),
+      });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [open, anchor, align, width, gap, maxHeight]);
+  return { style, above };
+}
+
+/** Render on document.body, out of every card's clipping and stacking. */
+export const Floating = ({ children }: { children: ReactNode }) =>
+  typeof document === 'undefined' ? null : createPortal(children, document.body);
+
 /**
  * A glass dropdown. Keyboard: ↑ ↓ to move, Enter to choose, Esc to close, or type
  * the first letters of an option.
@@ -191,6 +236,9 @@ export function Picker<V extends string = string>({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLUListElement>(null);
+  const float = useFloating(button, open, { align, maxHeight: 320 });
   const typed = useRef({ text: '', at: 0 });
   const selected = options.find((o) => o.value === value);
   const id = useId();
@@ -198,10 +246,15 @@ export function Picker<V extends string = string>({
   useEffect(() => {
     if (!open) return;
     setActive(Math.max(0, options.findIndex((o) => o.value === value)));
-    const close = (e: MouseEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    const close = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!root.current?.contains(t) && !menu.current?.contains(t)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
   }, [open, options, value]);
+  // Keep the highlighted option in view while using the arrow keys.
+  useEffect(() => { if (open) menu.current?.querySelectorAll('[role=option]')[active]?.scrollIntoView({ block: 'nearest' }); }, [active, open]);
 
   const choose = (o: PickerOption<V>) => { onChange(o.value); setOpen(false); };
 
@@ -226,6 +279,7 @@ export function Picker<V extends string = string>({
     <div ref={root} className={clsx('relative', className)}>
       {label && <Label htmlFor={id}>{label}</Label>}
       <button
+        ref={button}
         id={id}
         type="button"
         disabled={disabled}
@@ -240,17 +294,21 @@ export function Picker<V extends string = string>({
         <span className={clsx('min-w-0 flex-1 truncate', !selected && 'text-3')}>{selected?.label ?? placeholder}</span>
         <ChevronDown className={clsx('size-4 shrink-0 transition-transform duration-300', open && 'rotate-180')} />
       </button>
+      <Floating>
       <AnimatePresence>
         {open && (
           <motion.ul
+            ref={menu}
             role="listbox"
-            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            style={float.style}
+            initial={{ opacity: 0, y: float.above ? 6 : -6, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            exit={{ opacity: 0, y: float.above ? 6 : -6, scale: 0.97 }}
             transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
+            onKeyDown={onKey}
             className={clsx(
-              'glass-strong scroll-y absolute z-50 mt-2 max-h-80 min-w-full overflow-auto rounded-2xl p-1.5',
-              align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
+              'glass-strong scroll-y overflow-auto overscroll-contain rounded-2xl p-1.5 shadow-[0_24px_60px_-20px_rgba(0,0,0,.45)]',
+              float.above ? (align === 'right' ? 'origin-bottom-right' : 'origin-bottom-left') : (align === 'right' ? 'origin-top-right' : 'origin-top-left'),
               menuClassName,
             )}
           >
@@ -285,6 +343,7 @@ export function Picker<V extends string = string>({
           </motion.ul>
         )}
       </AnimatePresence>
+      </Floating>
     </div>
   );
 }
@@ -412,7 +471,9 @@ export function Sheet({
     return () => { document.removeEventListener('keydown', onKey); unlock(); };
   }, [open, onClose]);
 
+  // On document.body, so a sheet opened from inside a card covers the whole screen, not just that card.
   return (
+    <Floating>
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-6">
@@ -450,6 +511,7 @@ export function Sheet({
         </div>
       )}
     </AnimatePresence>
+    </Floating>
   );
 }
 

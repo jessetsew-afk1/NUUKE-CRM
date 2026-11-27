@@ -173,7 +173,11 @@ function CashFlow() {
 function BalanceSheet() {
   const { data, months } = useV();
   const r = useReport('company');
-  const end = months[months.length - 1];
+  const last = months[months.length - 1];
+  // A balance sheet is a snapshot: use the latest month-end numbers on or before the period's end.
+  const BAL = ['cash', 'receivables', 'other_assets', 'fixed_assets', 'payables', 'other_liabilities', 'debt'];
+  const end = [...new Set(data.stats.map((x) => x.month))].filter((m) => m <= last).sort().reverse()
+    .find((m) => BAL.some((k) => statFor(data.stats, m, 'company', k) != null)) ?? last;
   const g = (k: string) => statFor(data.stats, end, 'company', k);
   const cash = g('cash'); const ar = g('receivables'); const oa = g('other_assets'); const fa = g('fixed_assets');
   const ap = g('payables'); const ol = g('other_liabilities'); const debt = g('debt');
@@ -185,7 +189,7 @@ function BalanceSheet() {
     - data.entries.filter((e) => e.month <= end && e.kind === 'capital_out').reduce((a, e) => a + Number(e.amount), 0);
   return (
     <Panel>
-      <PanelHeader title="Balance sheet" sub={`At the end of ${monthLabel(end, true)}`} />
+      <PanelHeader title="Balance sheet" sub={`At the end of ${monthLabel(end, true)}${end !== last ? ' (latest month-end numbers)' : ''}`} />
       {!recorded ? (
         <p className="text-2 text-[13.5px]">Add the month-end cash, money owed to us, bills we owe and loans in <b>Monthly numbers</b> to see the balance sheet.</p>
       ) : (

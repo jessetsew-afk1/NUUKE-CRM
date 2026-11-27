@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,8 +18,8 @@ import { Ledger } from './Ledger';
 import { Numbers } from './Numbers';
 import { Investors } from './Investors';
 import { VaultSettings } from './VaultSettings';
+import { ExportSheet } from './ExportSheet';
 
-const Exporter = lazy(() => import('./pdf'));
 
 type Tab = 'overview' | 'statements' | 'metrics' | 'ledger' | 'numbers' | 'investors' | 'glossary' | 'settings';
 const TABS: { id: Tab; label: string; icon: typeof Gauge }[] = [
@@ -139,8 +139,10 @@ function Unlock({ lockedUntil }: { lockedUntil: string | null }) {
 function Vault() {
   const v = useVault();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>(() => (sessionStorage.getItem('nuuke.vault.tab') as Tab) || 'overview');
-  const [mode, setMode] = useState<Mode>(() => (localStorage.getItem('nuuke.vault.mode') as Mode) || 'simple');
+  // Private windows can block storage: fall back to the defaults instead of crashing.
+  const stored = (get: () => string | null) => { try { return get(); } catch { return null; } };
+  const [tab, setTab] = useState<Tab>(() => (TABS.some((t) => t.id === stored(() => sessionStorage.getItem('nuuke.vault.tab'))) ? stored(() => sessionStorage.getItem('nuuke.vault.tab')) as Tab : 'overview'));
+  const [mode, setMode] = useState<Mode>(() => (stored(() => localStorage.getItem('nuuke.vault.mode')) === 'pro' ? 'pro' : 'simple'));
   const [period, setPeriod] = useState<Period>({ preset: 'month', from: thisMonth(), to: thisMonth() });
   // Open on the latest month that has money in it (not an empty new month).
   const [placed, setPlaced] = useState(false);
@@ -188,11 +190,7 @@ function Vault() {
       {tab === 'glossary' && <Glossary />}
       {tab === 'settings' && <VaultSettings />}
 
-      {exporting && (
-        <Suspense fallback={null}>
-          <Exporter kind="company" ctx={ctx} onDone={() => setExporting(false)} />
-        </Suspense>
-      )}
+      <ExportSheet open={exporting} onClose={() => setExporting(false)} />
     </Ctx.Provider>
   );
 }
@@ -226,7 +224,7 @@ function VaultHero({ company, onExport, onLock }: { company: string; onExport: (
           <p className="mt-2 text-[13.5px] text-white/60">{company} · {periodLabel(months)}</p>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={onExport} className="flex h-10 items-center gap-2 rounded-2xl bg-white/10 px-4 text-[13.5px] font-bold backdrop-blur hover:bg-white/20"><FileDown className="size-4" />Report PDF</button>
+          <button type="button" onClick={onExport} className="flex h-10 items-center gap-2 rounded-2xl bg-white/10 px-4 text-[13.5px] font-bold backdrop-blur hover:bg-white/20"><FileDown className="size-4" />Export PDF</button>
           <button type="button" onClick={onLock} className="flex h-10 items-center gap-2 rounded-2xl bg-white px-4 text-[13.5px] font-bold text-black hover:bg-white/90"><Lock className="size-4" />Lock</button>
         </div>
       </div>
